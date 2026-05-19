@@ -1,21 +1,30 @@
 require('dotenv').config();
 const axios = require('axios');
+const { parseAdAccountIds, fetchAccountNames } = require('./src/metaAccounts');
 
 async function run() {
-  const res = await axios.get(
-    `https://graph.facebook.com/v21.0/${process.env.META_AD_ACCOUNT_ID}/insights`,
-    {
-      params: {
-        fields:
-          'campaign_name,spend,ctr,cpm,clicks,purchase_roas',
-        level: 'campaign',
-        date_preset: 'last_7d',
-        access_token: process.env.META_ACCESS_TOKEN,
-      },
-    }
+  const accountIds = parseAdAccountIds();
+  const accountNameMap = await fetchAccountNames(accountIds, process.env.META_ACCESS_TOKEN);
+  const responses = await Promise.all(
+    accountIds.map((accountId) => axios.get(
+      `https://graph.facebook.com/v21.0/${accountId}/insights`,
+      {
+        params: {
+          fields:
+            'campaign_name,spend,ctr,cpm,clicks,purchase_roas',
+          level: 'campaign',
+          date_preset: 'last_7d',
+          access_token: process.env.META_ACCESS_TOKEN,
+        },
+      }
+    ).then((res) => (res.data.data || []).map((row) => ({
+      ad_account_id: accountId,
+      account_name: accountNameMap.get(accountId) || accountId,
+      ...row,
+    }))))
   );
 
-  const data = res.data.data;
+  const data = responses.flat();
 
   const analyzed = data.map(c => {
     const roas =
@@ -24,6 +33,8 @@ async function run() {
         : 0;
 
     return {
+      ad_account_id: c.ad_account_id,
+      account_name: c.account_name || '',
       campaign: c.campaign_name,
       spend: Number(c.spend || 0),
       ctr: Number(c.ctr || 0),

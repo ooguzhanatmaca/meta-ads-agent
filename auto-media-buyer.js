@@ -2,10 +2,11 @@ require('dotenv').config();
 
 const axios = require('axios');
 const XLSX = require('xlsx');
+const { parseAdAccountIds, fetchAccountNames } = require('./src/metaAccounts');
 
 const API_VERSION = process.env.META_API_VERSION || 'v21.0';
 const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
-const AD_ACCOUNT_ID = process.env.META_AD_ACCOUNT_ID;
+const AD_ACCOUNT_IDS = parseAdAccountIds();
 const OUTPUT_FILE = 'meta-ai-report.xlsx';
 
 const PERIODS = [
@@ -81,8 +82,8 @@ const CREATIVE_FIELDS = [
 ].join(',');
 
 function validateConfig() {
-  if (!ACCESS_TOKEN || !AD_ACCOUNT_ID) {
-    throw new Error('META_ACCESS_TOKEN ve META_AD_ACCOUNT_ID .env icinde zorunludur.');
+  if (!ACCESS_TOKEN || AD_ACCOUNT_IDS.length === 0) {
+    throw new Error('META_ACCESS_TOKEN ve META_AD_ACCOUNT_IDS veya META_AD_ACCOUNT_ID .env icinde zorunludur.');
   }
 }
 
@@ -119,12 +120,14 @@ async function fetchPaginated(url, params) {
   return rows;
 }
 
-async function fetchInsights(level, period) {
-  return fetchPaginated(baseUrl(`${AD_ACCOUNT_ID}/insights`), {
+async function fetchInsights(adAccountId, level, period) {
+  const rows = await fetchPaginated(baseUrl(`${adAccountId}/insights`), {
     fields: fieldsForLevel(level),
     level,
     date_preset: period.datePreset,
   });
+
+  return rows.map((row) => ({ ad_account_id: adAccountId, account_name: '', ...row }));
 }
 
 function fieldsForLevel(level) {
@@ -134,15 +137,16 @@ function fieldsForLevel(level) {
   return METRIC_FIELDS;
 }
 
-async function fetchCampaignBudgets() {
-  const campaigns = await fetchPaginated(baseUrl(`${AD_ACCOUNT_ID}/campaigns`), {
+async function fetchCampaignBudgets(adAccountId) {
+  const campaigns = await fetchPaginated(baseUrl(`${adAccountId}/campaigns`), {
     fields: 'id,name,status,daily_budget,lifetime_budget,budget_remaining',
   });
 
   return new Map(
     campaigns.map((campaign) => [
-      campaign.id,
+      `${adAccountId}:${campaign.id}`,
       {
+        ad_account_id: adAccountId,
         status: campaign.status || '',
         daily_budget: centsToMoney(campaign.daily_budget),
         lifetime_budget: centsToMoney(campaign.lifetime_budget),
@@ -156,12 +160,14 @@ function centsToMoney(value) {
   return value ? round(toNumber(value) / 100) : 0;
 }
 
-async function fetchBreakdown(config, period) {
-  return fetchPaginated(baseUrl(`${AD_ACCOUNT_ID}/insights`), {
+async function fetchBreakdown(adAccountId, config, period) {
+  const rows = await fetchPaginated(baseUrl(`${adAccountId}/insights`), {
     fields: BREAKDOWN_FIELDS,
     breakdowns: config.breakdowns.join(','),
     date_preset: period.datePreset,
   });
+
+  return rows.map((row) => ({ ad_account_id: adAccountId, ...row }));
 }
 
 async function fetchCreativeForAd(adId) {
@@ -246,6 +252,8 @@ function normalizeInsight(raw, level, period, creativeMap = new Map()) {
   const creative = level === 'ad' ? creativeMap.get(raw.ad_id) || {} : {};
 
   return {
+    ad_account_id: raw.ad_account_id || '',
+    account_name: raw.account_name || '',
     period: period.label,
     days: period.days,
     level,
@@ -284,6 +292,8 @@ function normalizeBreakdown(raw, config, period) {
   const key = config.breakdowns.map((field) => raw[field] || 'unknown').join(' | ');
 
   return {
+    ad_account_id: raw.ad_account_id || '',
+    account_name: raw.account_name || '',
     period: period.label,
     days: period.days,
     audience_type: config.label,
@@ -344,20 +354,22 @@ function aggregateRows(rows, extra = {}) {
 }
 
 function buildCampaignPerformance(campaignRows, budgetMap) {
-  const grouped = groupBy(campaignRows, (row) => row.campaign_id);
+  const grouped = groupBy(campaignRows, (row) => `${row.ad_account_id}:${row.campaign_id}`);
 
-  return [...grouped.entries()].map(([campaignId, rows]) => {
+  return [...grouped.entries()].map(([campaignKey, rows]) => {
+    const campaignId = rows[0]?.campaign_id || campaignKey;
     const last7 = rows.filter((row) => row.days === 7);
     const last30 = rows.filter((row) => row.days === 30);
     const perf7 = aggregateRows(last7);
     const perf30 = aggregateRows(last30);
-    const budget = budgetMap.get(campaignId) || {};
+    const budget = budgetMap.get(campaignKey) || {};
     const roasDelta = perf7.roas - perf30.roas;
     const cpaDelta = perf7.cpa && perf30.cpa ? perf7.cpa - perf30.cpa : 0;
     const confidence = scaleConfidence(perf7, perf30);
     const increasePercent = budgetIncreasePercent(perf7, perf30, confidence);
 
     return {
+      ad_account_id: rows[0]?.ad_account_id || '',
       campaign_id: campaignId,
       campaign_name: rows[0]?.campaign_name || '',
       status: budget.status || '',
@@ -423,7 +435,7 @@ function budgetReason(perf7, perf30, confidence) {
 }
 
 function buildCreativeScores(adRows) {
-  const grouped = groupBy(adRows.filter((row) => row.days === 7), (row) => row.creative_id || row.ad_id);
+  const grouped = groupBy(adRows.filter((row) => row.days === 7), (row) => `${row.ad_account_id}:${row.creative_id || row.ad_id}`);
 
   return [...grouped.entries()].map(([creativeKey, rows]) => {
     const perf = aggregateRows(rows);
@@ -441,6 +453,7 @@ function buildCreativeScores(adRows) {
     ));
 
     return {
+      ad_account_id: sample.ad_account_id || '',
       creative_key: creativeKey,
       creative_id: sample.creative_id || '',
       ad_ids: rows.map((row) => row.ad_id).filter(Boolean).join(', '),
@@ -490,9 +503,9 @@ function buildAudienceRows(breakdownRows) {
 }
 
 function compareAudiencePeriods(rows) {
-  const grouped = groupBy(rows, (row) => row.audience_key);
+  const grouped = groupBy(rows, (row) => `${row.ad_account_id}:${row.audience_key}`);
   return rows.map((row) => {
-    const all = grouped.get(row.audience_key) || [];
+    const all = grouped.get(`${row.ad_account_id}:${row.audience_key}`) || [];
     const perf7 = aggregateRows(all.filter((item) => item.days === 7));
     const perf30 = aggregateRows(all.filter((item) => item.days === 30));
     return {
@@ -528,13 +541,15 @@ function audienceReason(decision) {
 function buildAudienceIntelligence(audienceRows) {
   const last7 = audienceRows.filter((row) => row.days === 7);
   const types = ['Age', 'Gender', 'Placement', 'Device', 'Country'];
+  const accountIds = [...new Set(last7.map((row) => row.ad_account_id).filter(Boolean))];
 
-  return types.map((type) => {
-    const rows = last7.filter((row) => row.audience_type === type);
+  return accountIds.flatMap((adAccountId) => types.map((type) => {
+    const rows = last7.filter((row) => row.ad_account_id === adAccountId && row.audience_type === type);
     const best = [...rows].sort((a, b) => b.roas - a.roas || a.cpa - b.cpa)[0] || {};
     const worst = [...rows].sort((a, b) => b.spend - a.spend || a.roas - b.roas)[0] || {};
 
     return {
+      ad_account_id: adAccountId,
       category: type,
       best_segment: best.audience_value || '',
       best_roas: best.roas || 0,
@@ -547,7 +562,7 @@ function buildAudienceIntelligence(audienceRows) {
         ? `${type} icinde en guclu segment ${best.audience_value}; ROAS ${best.roas}, CPA ${best.cpa}.`
         : `${type} icin yeterli veri yok.`,
     };
-  });
+  }));
 }
 
 function detectOpportunities(adRows, creativeScores, audienceRows) {
@@ -560,13 +575,13 @@ function detectOpportunities(adRows, creativeScores, audienceRows) {
     .map((row) => opportunityRow('LOW_CPA_HIGH_ROAS', row, `CPA ${row.cpa}, ROAS ${row.roas}`));
   const underScaledCreatives = creativeScores
     .filter((row) => row.creative_score >= 70 && row.spend <= THRESHOLDS.lowSpend)
-    .map((row) => ({ opportunity_type: 'UNDER_SCALED_CREATIVE', entity_name: row.ad_names, score: row.creative_score, reason: 'Creative score yuksek ama spend dusuk.' }));
+    .map((row) => ({ ad_account_id: row.ad_account_id, opportunity_type: 'UNDER_SCALED_CREATIVE', entity_name: row.ad_names, score: row.creative_score, reason: 'Creative score yuksek ama spend dusuk.' }));
   const winningAudiences = audienceRows
     .filter((row) => row.days === 7 && row.audience_decision.includes('WINNING_AUDIENCE'))
-    .map((row) => ({ opportunity_type: 'WINNING_AUDIENCE', entity_name: row.audience_value, score: row.roas, reason: row.audience_reason }));
+    .map((row) => ({ ad_account_id: row.ad_account_id, opportunity_type: 'WINNING_AUDIENCE', entity_name: row.audience_value, score: row.roas, reason: row.audience_reason }));
   const saturatedAudiences = audienceRows
     .filter((row) => row.days === 7 && row.audience_decision.includes('SATURATED_AUDIENCE'))
-    .map((row) => ({ opportunity_type: 'SATURATED_AUDIENCE', entity_name: row.audience_value, score: row.frequency, reason: row.audience_reason }));
+    .map((row) => ({ ad_account_id: row.ad_account_id, opportunity_type: 'SATURATED_AUDIENCE', entity_name: row.audience_value, score: row.frequency, reason: row.audience_reason }));
 
   return [...highCtrLowSpend, ...lowCpaHighRoas, ...underScaledCreatives, ...winningAudiences, ...saturatedAudiences]
     .sort((a, b) => b.score - a.score);
@@ -574,6 +589,7 @@ function detectOpportunities(adRows, creativeScores, audienceRows) {
 
 function opportunityRow(type, row, reason) {
   return {
+    ad_account_id: row.ad_account_id,
     opportunity_type: type,
     entity_name: row.ad_name || row.campaign_name,
     campaign_name: row.campaign_name,
@@ -614,8 +630,9 @@ function buildAiRecommendations(adRows, creativeScoreMap) {
   return adRows
     .filter((row) => row.days === 7)
     .map((row) => {
-      const creative = creativeScoreMap.get(row.creative_id || row.ad_id) || {};
+      const creative = creativeScoreMap.get(`${row.ad_account_id}:${row.creative_id || row.ad_id}`) || {};
       return {
+        ad_account_id: row.ad_account_id,
         campaign_name: row.campaign_name,
         adset_name: row.adset_name,
         ad_id: row.ad_id,
@@ -659,6 +676,7 @@ function exportWorkbook(data) {
   writeSheet(workbook, 'Opportunity Detection', data.opportunities);
   writeSheet(workbook, 'AI Recommendation', buildAiRecommendations(data.adRows, creativeScoreMap));
   writeSheet(workbook, 'Campaigns', data.campaignRows);
+  writeSheet(workbook, 'AdSets', data.adSetRows || []);
   writeSheet(workbook, 'Ads', data.adRows);
   writeSheet(workbook, 'Audience Rows', data.audienceRows);
   writeSheet(workbook, 'Scaling Audiences', data.audienceRows.filter((row) => row.days === 7 && row.audience_decision.includes('WINNING_AUDIENCE')));
@@ -671,32 +689,44 @@ function exportWorkbook(data) {
 async function main() {
   validateConfig();
 
-  const raw = { campaign: [], ad: [], breakdown: [] };
+  console.log('Hesap adlari cekiliyor...');
+  const accountNameMap = await fetchAccountNames(AD_ACCOUNT_IDS, ACCESS_TOKEN);
+
+  const raw = { campaign: [], adset: [], ad: [], breakdown: [] };
 
   console.log('Campaign budget bilgileri cekiliyor...');
-  const budgetMap = await fetchCampaignBudgets();
+  const budgetMaps = await Promise.all(AD_ACCOUNT_IDS.map((adAccountId) => fetchCampaignBudgets(adAccountId)));
+  const budgetMap = new Map(budgetMaps.flatMap((map) => [...map.entries()]));
 
-  for (const period of PERIODS) {
-    console.log(`${period.label} campaign/ad insights cekiliyor...`);
-    const [campaigns, ads] = await Promise.all([fetchInsights('campaign', period), fetchInsights('ad', period)]);
-    raw.campaign.push(...campaigns.map((row) => ({ row, period })));
-    raw.ad.push(...ads.map((row) => ({ row, period })));
-  }
+  for (const adAccountId of AD_ACCOUNT_IDS) {
+    for (const period of PERIODS) {
+      console.log(`${adAccountId} - ${period.label} campaign/ad insights cekiliyor...`);
+      const [campaigns, adsets, ads] = await Promise.all([
+        fetchInsights(adAccountId, 'campaign', period),
+        fetchInsights(adAccountId, 'adset', period),
+        fetchInsights(adAccountId, 'ad', period),
+      ]);
+      const addName = (row) => ({ ...row, account_name: accountNameMap.get(row.ad_account_id) || row.ad_account_id || '' });
+      raw.campaign.push(...campaigns.map((row) => ({ row: addName(row), period })));
+      raw.adset.push(...adsets.map((row) => ({ row: addName(row), period })));
+      raw.ad.push(...ads.map((row) => ({ row: addName(row), period })));
+    }
 
-  for (const period of PERIODS) {
-    console.log(`${period.label} audience intelligence breakdown cekiliyor...`);
-    const results = await Promise.allSettled(
-      BREAKDOWNS.map((config) => fetchBreakdown(config, period).then((rows) => ({ config, rows })))
-    );
+    for (const period of PERIODS) {
+      console.log(`${adAccountId} - ${period.label} audience intelligence breakdown cekiliyor...`);
+      const results = await Promise.allSettled(
+        BREAKDOWNS.map((config) => fetchBreakdown(adAccountId, config, period).then((rows) => ({ config, rows })))
+      );
 
-    results.forEach((result, index) => {
-      const config = BREAKDOWNS[index];
-      if (result.status !== 'fulfilled') {
-        console.warn(`${config.label} breakdown alinamadi: ${result.reason.response?.data?.error?.message || result.reason.message}`);
-        return;
-      }
-      raw.breakdown.push(...result.value.rows.map((row) => ({ row, period, config: result.value.config })));
-    });
+      results.forEach((result, index) => {
+        const config = BREAKDOWNS[index];
+        if (result.status !== 'fulfilled') {
+          console.warn(`${adAccountId} - ${config.label} breakdown alinamadi: ${result.reason.response?.data?.error?.message || result.reason.message}`);
+          return;
+        }
+        raw.breakdown.push(...result.value.rows.map((row) => ({ row, period, config: result.value.config })));
+      });
+    }
   }
 
   const adIds = raw.ad.map(({ row }) => row.ad_id);
@@ -704,6 +734,7 @@ async function main() {
   const creativeMap = await fetchCreatives(adIds);
 
   const campaignRows = raw.campaign.map(({ row, period }) => normalizeInsight(row, 'campaign', period));
+  const adSetRows = raw.adset.map(({ row, period }) => normalizeInsight(row, 'adset', period));
   const adRows = raw.ad.map(({ row, period }) => normalizeInsight(row, 'ad', period, creativeMap));
   const audienceRows = buildAudienceRows(raw.breakdown.map(({ row, period, config }) => normalizeBreakdown(row, config, period)));
   const campaignPerformance = buildCampaignPerformance(campaignRows, budgetMap);
@@ -714,6 +745,7 @@ async function main() {
 
   exportWorkbook({
     campaignRows,
+    adSetRows,
     adRows,
     audienceRows,
     campaignPerformance,

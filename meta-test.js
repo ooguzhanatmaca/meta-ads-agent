@@ -1,22 +1,25 @@
 require('dotenv').config();
 const axios = require('axios');
+const { parseAdAccountIds } = require('./src/metaAccounts');
 
 async function run() {
   const token = process.env.META_ACCESS_TOKEN;
-  const accountId = process.env.META_AD_ACCOUNT_ID;
+  const accountIds = parseAdAccountIds();
 
-  const response = await axios.get(
-    `https://graph.facebook.com/v22.0/${accountId}`,
-    {
-      params: {
-        fields: 'id,name,account_status',
-        access_token: token,
-      },
-    }
+  const responses = await Promise.all(
+    accountIds.map((accountId) => axios.get(
+      `https://graph.facebook.com/v22.0/${accountId}`,
+      {
+        params: {
+          fields: 'id,name,account_status',
+          access_token: token,
+        },
+      }
+    ).then((response) => ({ ad_account_id: accountId, account_name: response.data.name || '', ...response.data })))
   );
 
-  console.log('META BAĞLANTI BAŞARILI');
-  console.log(response.data);
+  console.log('META BAGLANTI BASARILI');
+  console.table(responses);
 }
 
 run().catch(err => {

@@ -4,10 +4,11 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const XLSX = require('xlsx');
+const { parseAdAccountIds, fetchAccountNames } = require('./src/metaAccounts');
 
 const API_VERSION = process.env.META_API_VERSION || 'v21.0';
 const ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
-const AD_ACCOUNT_ID = process.env.META_AD_ACCOUNT_ID;
+const AD_ACCOUNT_IDS = parseAdAccountIds();
 const OUTPUT_FILE = 'meta-advanced-report.xlsx';
 const PREVIEW_DIR = 'creative-previews';
 
@@ -93,8 +94,8 @@ const CREATIVE_FIELDS = [
 ].join(',');
 
 function validateConfig() {
-  if (!ACCESS_TOKEN || !AD_ACCOUNT_ID) {
-    throw new Error('META_ACCESS_TOKEN ve META_AD_ACCOUNT_ID .env icinde zorunludur.');
+  if (!ACCESS_TOKEN || AD_ACCOUNT_IDS.length === 0) {
+    throw new Error('META_ACCESS_TOKEN ve META_AD_ACCOUNT_IDS veya META_AD_ACCOUNT_ID .env icinde zorunludur.');
   }
 }
 
@@ -136,20 +137,24 @@ async function fetchPaginated(url, params) {
   return rows;
 }
 
-async function fetchInsights(level, period) {
-  return fetchPaginated(getBaseUrl(`${AD_ACCOUNT_ID}/insights`), {
+async function fetchInsights(adAccountId, level, period) {
+  const rows = await fetchPaginated(getBaseUrl(`${adAccountId}/insights`), {
     fields: getInsightFields(level),
     level,
     date_preset: period.datePreset,
   });
+
+  return rows.map((row) => ({ ad_account_id: adAccountId, ...row }));
 }
 
-async function fetchBreakdownInsights(config, period) {
-  return fetchPaginated(getBaseUrl(`${AD_ACCOUNT_ID}/insights`), {
+async function fetchBreakdownInsights(adAccountId, config, period) {
+  const rows = await fetchPaginated(getBaseUrl(`${adAccountId}/insights`), {
     fields: METRIC_FIELDS.join(','),
     breakdowns: config.breakdowns.join(','),
     date_preset: period.datePreset,
   });
+
+  return rows.map((row) => ({ ad_account_id: adAccountId, ...row }));
 }
 
 function getInsightFields(level) {
@@ -258,7 +263,7 @@ function getEntityName(raw, level) {
   return raw.ad_name;
 }
 
-function normalizeInsight(raw, level, period, creativeMap = new Map()) {
+function normalizeInsight(raw, level, period, creativeMap = new Map(), accountNameMap = new Map()) {
   const spend = toNumber(raw.spend);
   const purchases = getActionValue(raw.actions, 'purchase');
   const roas = getPurchaseRoas(raw.purchase_roas);
@@ -269,6 +274,8 @@ function normalizeInsight(raw, level, period, creativeMap = new Map()) {
   const creative = level === 'ad' ? creativeMap.get(raw.ad_id) || {} : {};
 
   return {
+    ad_account_id: raw.ad_account_id || '',
+    account_name: accountNameMap.get(raw.ad_account_id) || raw.ad_account_id || '',
     period: period.label,
     days: period.days,
     level,
@@ -303,7 +310,7 @@ function normalizeInsight(raw, level, period, creativeMap = new Map()) {
   };
 }
 
-function normalizeBreakdownInsight(raw, config, period) {
+function normalizeBreakdownInsight(raw, config, period, accountNameMap = new Map()) {
   const spend = toNumber(raw.spend);
   const purchases = getActionValue(raw.actions, 'purchase');
   const purchaseValue = getPurchaseValue(raw.action_values);
@@ -311,6 +318,8 @@ function normalizeBreakdownInsight(raw, config, period) {
   const dimension = getBreakdownDimension(raw, config);
 
   return {
+    ad_account_id: raw.ad_account_id || '',
+    account_name: accountNameMap.get(raw.ad_account_id) || raw.ad_account_id || '',
     period: period.label,
     days: period.days,
     analysis_type: config.analysisType,
@@ -381,7 +390,7 @@ function enrichAudienceComparison(rows) {
   const grouped = new Map();
 
   rows.forEach((row) => {
-    const key = `${row.breakdown_key}|${row.audience_key}`;
+    const key = `${row.ad_account_id}|${row.breakdown_key}|${row.audience_key}`;
     const current = grouped.get(key) || {
       last7: emptyAudienceMetrics(),
       last30: emptyAudienceMetrics(),
@@ -394,7 +403,7 @@ function enrichAudienceComparison(rows) {
   });
 
   return rows.map((row) => {
-    const comparison = grouped.get(`${row.breakdown_key}|${row.audience_key}`) || {};
+    const comparison = grouped.get(`${row.ad_account_id}|${row.breakdown_key}|${row.audience_key}`) || {};
     const last7 = finalizeAudienceMetrics(comparison.last7 || emptyAudienceMetrics());
     const last30 = finalizeAudienceMetrics(comparison.last30 || emptyAudienceMetrics());
     const roasDelta = last7.roas - last30.roas;
@@ -534,8 +543,9 @@ function summarizeRows(rows) {
   const grouped = new Map();
 
   rows.forEach((row) => {
-    const key = `${row.period}|${row.level}`;
+    const key = `${row.ad_account_id}|${row.period}|${row.level}`;
     const current = grouped.get(key) || {
+      ad_account_id: row.ad_account_id || '',
       period: row.period,
       level: row.level,
       spend: 0,
@@ -566,6 +576,7 @@ function summarizeRows(rows) {
   });
 
   return [...grouped.values()].map((row) => ({
+    ad_account_id: row.ad_account_id,
     period: row.period,
     level: row.level,
     rows: row.rows,
@@ -591,8 +602,9 @@ function getCreativeRows(adRows) {
   const byCreative = new Map();
 
   adRows.forEach((row) => {
-    const key = row.creative_id || row.ad_id;
+    const key = `${row.ad_account_id}:${row.creative_id || row.ad_id}`;
     const current = byCreative.get(key) || {
+      ad_account_id: row.ad_account_id || '',
       creative_id: row.creative_id,
       creative_key: key,
       ad_ids: new Set(),
@@ -637,6 +649,7 @@ function getCreativeRows(adRows) {
   });
 
   return [...byCreative.values()].map((row) => ({
+    ad_account_id: row.ad_account_id,
     creative_id: row.creative_id,
     creative_key: row.creative_key,
     reused: row.ad_ids.size > 1 ? 'YES' : 'NO',
@@ -704,7 +717,7 @@ function rankCreatives(creativeRows) {
 }
 
 function getCreativeKey(row) {
-  return row.creative_id || row.ad_id || row.creative_key;
+  return `${row.ad_account_id || ''}:${row.creative_id || row.ad_id || row.creative_key}`;
 }
 
 function buildCreativePeriodComparison(adRows) {
@@ -713,6 +726,7 @@ function buildCreativePeriodComparison(adRows) {
   adRows.forEach((row) => {
     const key = getCreativeKey(row);
     const current = grouped.get(key) || {
+      ad_account_id: row.ad_account_id || '',
       creative_key: key,
       creative_id: row.creative_id,
       ad_ids: new Set(),
@@ -736,6 +750,7 @@ function buildCreativePeriodComparison(adRows) {
     const roasDrop = last30.purchase_roas > 0 ? ((last30.purchase_roas - last7.purchase_roas) / last30.purchase_roas) * 100 : 0;
 
     return {
+      ad_account_id: row.ad_account_id,
       creative_id: row.creative_id,
       creative_key: row.creative_key,
       ad_ids: [...row.ad_ids].filter(Boolean).join(', '),
@@ -1008,6 +1023,9 @@ function exportWorkbook({ allRows, campaignRows, adSetRows, adRows, creativeRows
 async function main() {
   validateConfig();
 
+  console.log('Hesap adlari cekiliyor...');
+  const accountNameMap = await fetchAccountNames(AD_ACCOUNT_IDS, ACCESS_TOKEN);
+
   const rawByLevel = {
     campaign: [],
     adset: [],
@@ -1015,39 +1033,41 @@ async function main() {
   };
   const rawBreakdowns = [];
 
-  for (const period of PERIODS) {
-    console.log(`${period.label} verileri cekiliyor...`);
-    const [campaigns, adsets, ads] = await Promise.all([
-      fetchInsights('campaign', period),
-      fetchInsights('adset', period),
-      fetchInsights('ad', period),
-    ]);
+  for (const adAccountId of AD_ACCOUNT_IDS) {
+    for (const period of PERIODS) {
+      console.log(`${adAccountId} - ${period.label} verileri cekiliyor...`);
+      const [campaigns, adsets, ads] = await Promise.all([
+        fetchInsights(adAccountId, 'campaign', period),
+        fetchInsights(adAccountId, 'adset', period),
+        fetchInsights(adAccountId, 'ad', period),
+      ]);
 
-    rawByLevel.campaign.push(...campaigns.map((row) => ({ row, period })));
-    rawByLevel.adset.push(...adsets.map((row) => ({ row, period })));
-    rawByLevel.ad.push(...ads.map((row) => ({ row, period })));
-  }
+      rawByLevel.campaign.push(...campaigns.map((row) => ({ row, period })));
+      rawByLevel.adset.push(...adsets.map((row) => ({ row, period })));
+      rawByLevel.ad.push(...ads.map((row) => ({ row, period })));
+    }
 
-  for (const period of BREAKDOWN_PERIODS) {
-    console.log(`${period.label} audience breakdown verileri cekiliyor...`);
-    const results = await Promise.allSettled(
-      BREAKDOWN_CONFIGS.map((config) => fetchBreakdownInsights(config, period).then((rows) => ({ config, rows })))
-    );
+    for (const period of BREAKDOWN_PERIODS) {
+      console.log(`${adAccountId} - ${period.label} audience breakdown verileri cekiliyor...`);
+      const results = await Promise.allSettled(
+        BREAKDOWN_CONFIGS.map((config) => fetchBreakdownInsights(adAccountId, config, period).then((rows) => ({ config, rows })))
+      );
 
-    results.forEach((result, index) => {
-      const config = BREAKDOWN_CONFIGS[index];
+      results.forEach((result, index) => {
+        const config = BREAKDOWN_CONFIGS[index];
 
-      if (result.status !== 'fulfilled') {
-        console.warn(
-          `${config.analysisType} breakdown alinamadi: ${
-            result.reason.response?.data?.error?.message || result.reason.message
-          }`
-        );
-        return;
-      }
+        if (result.status !== 'fulfilled') {
+          console.warn(
+            `${adAccountId} - ${config.analysisType} breakdown alinamadi: ${
+              result.reason.response?.data?.error?.message || result.reason.message
+            }`
+          );
+          return;
+        }
 
-      rawBreakdowns.push(...result.value.rows.map((row) => ({ row, period, config: result.value.config })));
-    });
+        rawBreakdowns.push(...result.value.rows.map((row) => ({ row, period, config: result.value.config })));
+      });
+    }
   }
 
   const adIds = rawByLevel.ad.map(({ row }) => row.ad_id);
@@ -1055,11 +1075,13 @@ async function main() {
   const creativeMap = await fetchCreativesForAds(adIds);
 
   const campaignRows = addDecisions(
-    rawByLevel.campaign.map(({ row, period }) => normalizeInsight(row, 'campaign', period))
+    rawByLevel.campaign.map(({ row, period }) => normalizeInsight(row, 'campaign', period, new Map(), accountNameMap))
   );
-  const adSetRows = addDecisions(rawByLevel.adset.map(({ row, period }) => normalizeInsight(row, 'adset', period)));
+  const adSetRows = addDecisions(
+    rawByLevel.adset.map(({ row, period }) => normalizeInsight(row, 'adset', period, new Map(), accountNameMap))
+  );
   const normalizedAdRows = addDecisions(
-    rawByLevel.ad.map(({ row, period }) => normalizeInsight(row, 'ad', period, creativeMap))
+    rawByLevel.ad.map(({ row, period }) => normalizeInsight(row, 'ad', period, creativeMap, accountNameMap))
   );
 
   console.log('Creative ranking ve local preview dosyalari olusturuluyor...');
@@ -1069,7 +1091,7 @@ async function main() {
   const allRows = [...campaignRows, ...adSetRows, ...adRows];
   const audienceRows = enrichAudienceComparison(
     addAudienceDecisions(
-      rawBreakdowns.map(({ row, period, config }) => normalizeBreakdownInsight(row, config, period))
+      rawBreakdowns.map(({ row, period, config }) => normalizeBreakdownInsight(row, config, period, accountNameMap))
     )
   );
 

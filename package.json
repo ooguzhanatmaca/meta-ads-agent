@@ -4,7 +4,16 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "analyze": "node src/index.js"
+    "analyze": "node src/index.js",
+    "campaigns": "node campaigns.js",
+    "insights": "node insights.js",
+    "track": "node track.js",
+    "recommend": "node recommend.js",
+    "apply-budget": "node apply-budget.js",
+    "create:campaign": "node create-campaign.js",
+    "create:adset": "node create-adset.js",
+    "create:ad": "node create-ad.js",
+    "search:interests": "node search-interests.js"
   },
   "keywords": [],
   "author": "",

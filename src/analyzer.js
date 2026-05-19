@@ -19,6 +19,8 @@ function normalizeCampaign(raw) {
   const score = roas * 50 + ctr * 20 - cpm * 0.1;
 
   return {
+    adAccountId: raw.ad_account_id || '',
+    accountName: raw.account_name || '',
     campaignId: raw.campaign_id,
     campaignName: raw.campaign_name,
     spend,
