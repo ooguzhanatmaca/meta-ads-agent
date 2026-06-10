@@ -1,5 +1,7 @@
 from agents import Agent
 
+from app.tools.meta_account import get_meta_ad_account_info
+
 
 meta_ads_agent = Agent(
     name="Meta Ads Agent",
@@ -23,4 +25,5 @@ meta_ads_agent = Agent(
     3. Riskler
     4. Önerilen aksiyonlar
     """,
+    tools=[get_meta_ad_account_info],
 )
