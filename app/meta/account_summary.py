@@ -9,6 +9,9 @@ PURCHASE_ACTION_TYPES = (
     "purchase",
     "omni_purchase",
     "offsite_conversion.fb_pixel_purchase",
+    "onsite_web_purchase",
+    "offsite_conversion.purchase",
+    "offline_conversion.purchase",
 )
 
 

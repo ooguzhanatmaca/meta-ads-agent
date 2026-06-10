@@ -23,6 +23,11 @@ ACCOUNT_INSIGHT_FIELDS = (
     "actions",
     "action_values",
 )
+REPORT_LEVEL_EDGES = {
+    "campaign": "campaigns",
+    "adset": "adsets",
+    "ad": "ads",
+}
 DEFAULT_TIMEOUT_SECONDS = 15
 
 
@@ -113,6 +118,46 @@ class MetaClient:
             raise MetaResponseError("Meta API insights satırı beklenen biçimde değil.")
         return insight
 
+    def get_performance_report(
+        self, level: str, date_preset: str = "last_7d"
+    ) -> list[dict[str, Any]]:
+        """Return read-only entity details with nested performance insights."""
+        edge = REPORT_LEVEL_EDGES.get(level)
+        if edge is None:
+            raise MetaConfigurationError(f"Desteklenmeyen rapor seviyesi: {level}")
+
+        url = (
+            f"https://graph.facebook.com/{self.graph_api_version}/"
+            f"{self.ad_account_id}/{edge}"
+        )
+        insight_fields = ",".join(ACCOUNT_INSIGHT_FIELDS)
+        params = {
+            "fields": (
+                "id,name,status,"
+                f"insights.date_preset({date_preset}){{{insight_fields}}}"
+            ),
+            "limit": "100",
+        }
+
+        entities: list[dict[str, Any]] = []
+        while True:
+            payload = self._get(url, params)
+            data = payload.get("data")
+            if not isinstance(data, list):
+                raise MetaResponseError("Meta API rapor verisi beklenen biçimde değil.")
+            if not all(isinstance(item, dict) for item in data):
+                raise MetaResponseError("Meta API rapor satırı beklenen biçimde değil.")
+            entities.extend(data)
+
+            paging = payload.get("paging")
+            cursors = paging.get("cursors") if isinstance(paging, dict) else None
+            after = cursors.get("after") if isinstance(cursors, dict) else None
+            if not after or not paging.get("next"):
+                break
+            params = {**params, "after": str(after)}
+
+        return entities
+
     def _get(self, url: str, params: dict[str, str]) -> dict[str, Any]:
         """Send an authenticated GET request without exposing credentials."""
 
@@ -174,3 +219,10 @@ def test_meta_connection() -> bool:
 def get_account_insights(date_preset: str = "last_7d") -> dict[str, Any]:
     """Read account-level insights for the configured Meta ad account."""
     return MetaClient.from_env().get_account_insights(date_preset)
+
+
+def get_performance_report(
+    level: str, date_preset: str = "last_7d"
+) -> list[dict[str, Any]]:
+    """Read entity-level performance for the configured Meta ad account."""
+    return MetaClient.from_env().get_performance_report(level, date_preset)

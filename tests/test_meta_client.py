@@ -114,3 +114,37 @@ def test_get_account_insights_handles_empty_data(mock_get: Mock) -> None:
     mock_get.return_value.json.return_value = {"data": []}
 
     assert build_client().get_account_insights() == {}
+
+
+@patch("app.meta.client.requests.get")
+def test_get_performance_report_uses_entity_edge_and_pagination(mock_get: Mock) -> None:
+    mock_get.side_effect = [
+        Mock(
+            ok=True,
+            **{
+                "json.return_value": {
+                    "data": [{"id": "1"}],
+                    "paging": {
+                        "cursors": {"after": "cursor-1"},
+                        "next": "https://example.invalid/next",
+                    },
+                }
+            },
+        ),
+        Mock(ok=True, **{"json.return_value": {"data": [{"id": "2"}]}}),
+    ]
+
+    result = build_client().get_performance_report("campaign")
+
+    assert result == [{"id": "1"}, {"id": "2"}]
+    first_params = mock_get.call_args_list[0].kwargs["params"]
+    second_params = mock_get.call_args_list[1].kwargs["params"]
+    assert "id,name,status,insights.date_preset(last_7d)" in first_params["fields"]
+    assert first_params["limit"] == "100"
+    assert second_params["after"] == "cursor-1"
+    assert "access_token" not in str(mock_get.call_args_list)
+
+
+def test_get_performance_report_rejects_unknown_level() -> None:
+    with pytest.raises(MetaConfigurationError, match="Desteklenmeyen"):
+        build_client().get_performance_report("unknown")
