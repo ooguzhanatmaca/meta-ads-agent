@@ -1,5 +1,6 @@
 """Read-only client for the Meta Marketing API."""
 
+import json
 import os
 from typing import Any
 
@@ -97,6 +98,17 @@ class MetaClient:
 
     def get_account_insights(self, date_preset: str = "last_7d") -> dict[str, Any]:
         """Return account-level performance metrics for a read-only date preset."""
+        return self._get_account_insights({"date_preset": date_preset})
+
+    def get_account_insights_for_period(
+        self, since: str, until: str
+    ) -> dict[str, Any]:
+        """Return account-level metrics for an explicit inclusive date range."""
+        return self._get_account_insights(
+            {"time_range": json.dumps({"since": since, "until": until})}
+        )
+
+    def _get_account_insights(self, period_params: dict[str, str]) -> dict[str, Any]:
         url = (
             f"https://graph.facebook.com/{self.graph_api_version}/"
             f"{self.ad_account_id}/insights"
@@ -105,8 +117,8 @@ class MetaClient:
             url,
             {
                 "fields": ",".join(ACCOUNT_INSIGHT_FIELDS),
-                "date_preset": date_preset,
                 "level": "account",
+                **period_params,
             },
         )
         data = payload.get("data")
@@ -219,6 +231,11 @@ def test_meta_connection() -> bool:
 def get_account_insights(date_preset: str = "last_7d") -> dict[str, Any]:
     """Read account-level insights for the configured Meta ad account."""
     return MetaClient.from_env().get_account_insights(date_preset)
+
+
+def get_account_insights_for_period(since: str, until: str) -> dict[str, Any]:
+    """Read account insights for an explicit inclusive date range."""
+    return MetaClient.from_env().get_account_insights_for_period(since, until)
 
 
 def get_performance_report(

@@ -117,6 +117,22 @@ def test_get_account_insights_handles_empty_data(mock_get: Mock) -> None:
 
 
 @patch("app.meta.client.requests.get")
+def test_get_account_insights_for_explicit_period(mock_get: Mock) -> None:
+    mock_get.return_value = Mock(ok=True)
+    mock_get.return_value.json.return_value = {"data": [{"spend": "25"}]}
+
+    result = build_client().get_account_insights_for_period(
+        "2026-06-01", "2026-06-03"
+    )
+
+    assert result == {"spend": "25"}
+    params = mock_get.call_args.kwargs["params"]
+    assert params["time_range"] == '{"since": "2026-06-01", "until": "2026-06-03"}'
+    assert params["level"] == "account"
+    assert "access_token" not in str(mock_get.call_args)
+
+
+@patch("app.meta.client.requests.get")
 def test_get_performance_report_uses_entity_edge_and_pagination(mock_get: Mock) -> None:
     mock_get.side_effect = [
         Mock(
