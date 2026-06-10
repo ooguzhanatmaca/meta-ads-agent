@@ -15,6 +15,14 @@ AD_ACCOUNT_FIELDS = (
     "timezone_name",
     "amount_spent",
 )
+ACCOUNT_INSIGHT_FIELDS = (
+    "spend",
+    "impressions",
+    "reach",
+    "clicks",
+    "actions",
+    "action_values",
+)
 DEFAULT_TIMEOUT_SECONDS = 15
 
 
@@ -80,11 +88,39 @@ class MetaClient:
             f"{self.ad_account_id}"
         )
 
+        return self._get(url, {"fields": ",".join(AD_ACCOUNT_FIELDS)})
+
+    def get_account_insights(self, date_preset: str = "last_7d") -> dict[str, Any]:
+        """Return account-level performance metrics for a read-only date preset."""
+        url = (
+            f"https://graph.facebook.com/{self.graph_api_version}/"
+            f"{self.ad_account_id}/insights"
+        )
+        payload = self._get(
+            url,
+            {
+                "fields": ",".join(ACCOUNT_INSIGHT_FIELDS),
+                "date_preset": date_preset,
+                "level": "account",
+            },
+        )
+        data = payload.get("data")
+        if not isinstance(data, list):
+            raise MetaResponseError("Meta API insights verisi beklenen biçimde değil.")
+
+        insight = data[0] if data else {}
+        if not isinstance(insight, dict):
+            raise MetaResponseError("Meta API insights satırı beklenen biçimde değil.")
+        return insight
+
+    def _get(self, url: str, params: dict[str, str]) -> dict[str, Any]:
+        """Send an authenticated GET request without exposing credentials."""
+
         try:
             response = requests.get(
                 url,
                 headers={"Authorization": f"Bearer {self._access_token}"},
-                params={"fields": ",".join(AD_ACCOUNT_FIELDS)},
+                params=params,
                 timeout=self.timeout,
             )
         except requests.Timeout as error:
@@ -133,3 +169,8 @@ def get_ad_account_info() -> dict[str, Any]:
 def test_meta_connection() -> bool:
     """Test access to the configured Meta ad account."""
     return MetaClient.from_env().test_connection()
+
+
+def get_account_insights(date_preset: str = "last_7d") -> dict[str, Any]:
+    """Read account-level insights for the configured Meta ad account."""
+    return MetaClient.from_env().get_account_insights(date_preset)

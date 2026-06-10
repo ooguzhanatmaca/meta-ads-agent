@@ -5,6 +5,7 @@ import requests
 
 from app.meta.client import (
     AD_ACCOUNT_FIELDS,
+    ACCOUNT_INSIGHT_FIELDS,
     MetaClient,
     MetaConfigurationError,
     MetaRequestError,
@@ -84,3 +85,32 @@ def test_missing_configuration_is_rejected() -> None:
 def test_connection_returns_true(mock_get_ad_account_info: Mock) -> None:
     assert build_client().test_connection() is True
     mock_get_ad_account_info.assert_called_once_with()
+
+
+@patch("app.meta.client.requests.get")
+def test_get_account_insights_requests_last_seven_days(mock_get: Mock) -> None:
+    expected_insight = {"spend": "100", "impressions": "5000"}
+    mock_get.return_value = Mock(ok=True)
+    mock_get.return_value.json.return_value = {"data": [expected_insight]}
+
+    result = build_client().get_account_insights()
+
+    assert result == expected_insight
+    mock_get.assert_called_once_with(
+        "https://graph.facebook.com/v23.0/act_123456/insights",
+        headers={"Authorization": "Bearer test-token"},
+        params={
+            "fields": ",".join(ACCOUNT_INSIGHT_FIELDS),
+            "date_preset": "last_7d",
+            "level": "account",
+        },
+        timeout=15,
+    )
+
+
+@patch("app.meta.client.requests.get")
+def test_get_account_insights_handles_empty_data(mock_get: Mock) -> None:
+    mock_get.return_value = Mock(ok=True)
+    mock_get.return_value.json.return_value = {"data": []}
+
+    assert build_client().get_account_insights() == {}

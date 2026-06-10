@@ -6,6 +6,7 @@ from app.meta.client import (
     MetaConfigurationError,
     MetaRequestError,
     MetaResponseError,
+    get_account_insights,
     get_ad_account_info,
     test_meta_connection,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "MetaConfigurationError",
     "MetaRequestError",
     "MetaResponseError",
+    "get_account_insights",
     "get_ad_account_info",
     "test_meta_connection",
 ]
