@@ -71,6 +71,22 @@ def test_report_rows_handle_missing_and_zero_values() -> None:
     assert row["roas"] == 0
 
 
+def test_report_rows_include_parent_names() -> None:
+    row = calculate_report_rows(
+        [
+            {
+                "id": "1",
+                "name": "Ad",
+                "campaign": {"name": "Campaign"},
+                "adset": {"name": "Ad Set"},
+            }
+        ]
+    )[0]
+
+    assert row["campaign_name"] == "Campaign"
+    assert row["adset_name"] == "Ad Set"
+
+
 def test_format_report_contains_readable_table() -> None:
     output = format_report("Test raporu", calculate_report_rows([{"id": "1", "name": "Test"}]))
 

@@ -29,6 +29,8 @@ def calculate_report_rows(entities: list[dict[str, Any]]) -> list[dict[str, Any]
     """Flatten entity insights and calculate stable derived metrics."""
     rows = []
     for entity in entities:
+        campaign = entity.get("campaign")
+        adset = entity.get("adset")
         insights = entity.get("insights")
         insight_data = insights.get("data") if isinstance(insights, dict) else None
         insight = insight_data[0] if isinstance(insight_data, list) and insight_data else {}
@@ -41,6 +43,12 @@ def calculate_report_rows(entities: list[dict[str, Any]]) -> list[dict[str, Any]
             {
                 "id": str(entity.get("id") or "-"),
                 "name": str(entity.get("name") or "-"),
+                "campaign_name": str(
+                    campaign.get("name") if isinstance(campaign, dict) else "-"
+                ),
+                "adset_name": str(
+                    adset.get("name") if isinstance(adset, dict) else "-"
+                ),
                 "status": str(entity.get("status") or "-"),
                 **metrics,
                 "frequency": metrics["impressions"] / reach if reach else 0.0,

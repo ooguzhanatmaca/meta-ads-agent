@@ -29,6 +29,11 @@ REPORT_LEVEL_EDGES = {
     "adset": "adsets",
     "ad": "ads",
 }
+REPORT_LEVEL_FIELDS = {
+    "campaign": "id,name,status",
+    "adset": "id,name,campaign{id,name},status",
+    "ad": "id,name,adset{id,name},campaign{id,name},status",
+}
 DEFAULT_TIMEOUT_SECONDS = 15
 
 
@@ -143,9 +148,10 @@ class MetaClient:
             f"{self.ad_account_id}/{edge}"
         )
         insight_fields = ",".join(ACCOUNT_INSIGHT_FIELDS)
+        entity_fields = REPORT_LEVEL_FIELDS[level]
         params = {
             "fields": (
-                "id,name,status,"
+                f"{entity_fields},"
                 f"insights.date_preset({date_preset}){{{insight_fields}}}"
             ),
             "limit": "100",
