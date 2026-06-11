@@ -139,6 +139,22 @@ class MetaClient:
         self, level: str, date_preset: str = "last_7d"
     ) -> list[dict[str, Any]]:
         """Return read-only entity details with nested performance insights."""
+        insight_period = f"date_preset({date_preset})"
+        return self._get_performance_report(level, insight_period)
+
+    def get_performance_report_for_period(
+        self, level: str, since: str, until: str
+    ) -> list[dict[str, Any]]:
+        """Return entity performance for an explicit inclusive date range."""
+        time_range = json.dumps(
+            {"since": since, "until": until},
+            separators=(",", ":"),
+        )
+        return self._get_performance_report(level, f"time_range({time_range})")
+
+    def _get_performance_report(
+        self, level: str, insight_period: str
+    ) -> list[dict[str, Any]]:
         edge = REPORT_LEVEL_EDGES.get(level)
         if edge is None:
             raise MetaConfigurationError(f"Desteklenmeyen rapor seviyesi: {level}")
@@ -152,7 +168,7 @@ class MetaClient:
         params = {
             "fields": (
                 f"{entity_fields},"
-                f"insights.date_preset({date_preset}){{{insight_fields}}}"
+                f"insights.{insight_period}{{{insight_fields}}}"
             ),
             "limit": "100",
         }
@@ -249,3 +265,12 @@ def get_performance_report(
 ) -> list[dict[str, Any]]:
     """Read entity-level performance for the configured Meta ad account."""
     return MetaClient.from_env().get_performance_report(level, date_preset)
+
+
+def get_performance_report_for_period(
+    level: str, since: str, until: str
+) -> list[dict[str, Any]]:
+    """Read entity performance for an explicit inclusive date range."""
+    return MetaClient.from_env().get_performance_report_for_period(
+        level, since, until
+    )

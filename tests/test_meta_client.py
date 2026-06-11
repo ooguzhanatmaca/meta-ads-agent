@@ -161,6 +161,28 @@ def test_get_performance_report_uses_entity_edge_and_pagination(mock_get: Mock) 
     assert "access_token" not in str(mock_get.call_args_list)
 
 
+@patch("app.meta.client.requests.get")
+def test_get_performance_report_for_explicit_period(mock_get: Mock) -> None:
+    mock_get.return_value = Mock(ok=True)
+    mock_get.return_value.json.return_value = {"data": []}
+
+    result = build_client().get_performance_report_for_period(
+        "ad",
+        "2026-06-01",
+        "2026-06-07",
+    )
+
+    assert result == []
+    fields = mock_get.call_args.kwargs["params"]["fields"]
+    assert "adset{id,name}" in fields
+    assert "campaign{id,name}" in fields
+    assert (
+        'insights.time_range({"since":"2026-06-01","until":"2026-06-07"})'
+        in fields
+    )
+    assert "access_token" not in str(mock_get.call_args)
+
+
 def test_get_performance_report_rejects_unknown_level() -> None:
     with pytest.raises(MetaConfigurationError, match="Desteklenmeyen"):
         build_client().get_performance_report("unknown")
