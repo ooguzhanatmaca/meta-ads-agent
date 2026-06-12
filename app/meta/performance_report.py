@@ -25,12 +25,41 @@ HEADERS = (
 )
 
 
+def _number(value: Any) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _action_metric(value: Any) -> float:
+    if not isinstance(value, list):
+        return 0.0
+    return sum(
+        _number(item.get("value"))
+        for item in value
+        if isinstance(item, dict)
+    )
+
+
+def _creative_type(creative: dict[str, Any]) -> str:
+    object_type = str(creative.get("object_type") or "").upper()
+    if creative.get("video_id") or "VIDEO" in object_type:
+        return "Video"
+    if "CAROUSEL" in object_type:
+        return "Dönen Görsel"
+    return "Görsel"
+
+
 def calculate_report_rows(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Flatten entity insights and calculate stable derived metrics."""
     rows = []
     for entity in entities:
         campaign = entity.get("campaign")
         adset = entity.get("adset")
+        creative = entity.get("creative")
+        if not isinstance(creative, dict):
+            creative = {}
         insights = entity.get("insights")
         insight_data = insights.get("data") if isinstance(insights, dict) else None
         insight = insight_data[0] if isinstance(insight_data, list) and insight_data else {}
@@ -39,6 +68,14 @@ def calculate_report_rows(entities: list[dict[str, Any]]) -> list[dict[str, Any]
 
         metrics = calculate_summary(insight)
         reach = metrics["reach"]
+        video_plays = _action_metric(insight.get("video_play_actions"))
+        video_p25 = _action_metric(insight.get("video_p25_watched_actions"))
+        video_p50 = _action_metric(insight.get("video_p50_watched_actions"))
+        video_p75 = _action_metric(insight.get("video_p75_watched_actions"))
+        video_p95 = _action_metric(insight.get("video_p95_watched_actions"))
+        video_thruplays = _action_metric(
+            insight.get("video_thruplay_watched_actions")
+        )
         rows.append(
             {
                 "id": str(entity.get("id") or "-"),
@@ -50,8 +87,30 @@ def calculate_report_rows(entities: list[dict[str, Any]]) -> list[dict[str, Any]
                     adset.get("name") if isinstance(adset, dict) else "-"
                 ),
                 "status": str(entity.get("status") or "-"),
+                "creative_id": str(creative.get("id") or "-"),
+                "creative_name": str(creative.get("name") or "-"),
+                "creative_type": _creative_type(creative),
+                "thumbnail_url": str(
+                    creative.get("thumbnail_url")
+                    or creative.get("image_url")
+                    or ""
+                ),
                 **metrics,
                 "frequency": metrics["impressions"] / reach if reach else 0.0,
+                "video_plays": video_plays,
+                "video_p25": video_p25,
+                "video_p50": video_p50,
+                "video_p75": video_p75,
+                "video_p95": video_p95,
+                "video_thruplays": video_thruplays,
+                "video_hook_rate": (
+                    video_plays / metrics["impressions"] * 100
+                    if metrics["impressions"]
+                    else 0.0
+                ),
+                "video_hold_rate": (
+                    video_p75 / video_plays * 100 if video_plays else 0.0
+                ),
             }
         )
 

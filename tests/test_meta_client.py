@@ -176,6 +176,9 @@ def test_get_performance_report_for_explicit_period(mock_get: Mock) -> None:
     fields = mock_get.call_args.kwargs["params"]["fields"]
     assert "adset{id,name}" in fields
     assert "campaign{id,name}" in fields
+    assert "creative{id,name,thumbnail_url,object_type,video_id,image_url}" in fields
+    assert "video_play_actions" in fields
+    assert "video_thruplay_watched_actions" in fields
     assert (
         'insights.time_range({"since":"2026-06-01","until":"2026-06-07"})'
         in fields

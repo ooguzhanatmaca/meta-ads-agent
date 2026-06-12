@@ -21,6 +21,9 @@ from app.dashboard_data import (
 from app.meta.client import MetaAPIError
 
 
+CACHE_SCHEMA_VERSION = 2
+
+
 st.set_page_config(
     page_title="Meta Ads Yönetim Paneli",
     page_icon="📊",
@@ -29,7 +32,12 @@ st.set_page_config(
 
 
 @st.cache_data(ttl=900, show_spinner=False)
-def cached_dashboard_data(start_date: date, end_date: date):
+def cached_dashboard_data(
+    start_date: date,
+    end_date: date,
+    schema_version: int = CACHE_SCHEMA_VERSION,
+):
+    del schema_version
     return load_dashboard_data(start_date, end_date)
 
 
@@ -114,6 +122,81 @@ def render_table(title: str, rows, columns) -> None:
     )
 
 
+def render_creatives(creatives) -> None:
+    st.subheader("Kreatif Performansı")
+    st.caption(
+        "Görsel ve videolar, seçilen dönemdeki reklam sonuçlarına göre "
+        "kural tabanlı olarak değerlendirilir."
+    )
+    if not creatives:
+        st.info("Seçilen dönemde kreatif verisi bulunamadı.")
+        return
+
+    filters = st.columns(3)
+    types = sorted({item["creative_type"] for item in creatives})
+    selected_types = filters[0].multiselect(
+        "Kreatif türü",
+        types,
+        default=types,
+    )
+    labels = sorted({item["creative_label"] for item in creatives})
+    selected_labels = filters[1].multiselect(
+        "Performans etiketi",
+        labels,
+        default=labels,
+    )
+    show_without_spend = filters[2].checkbox(
+        "Harcamasız reklamları göster",
+        value=False,
+    )
+    visible = [
+        item
+        for item in creatives
+        if item["creative_type"] in selected_types
+        and item["creative_label"] in selected_labels
+        and (show_without_spend or float(item.get("spend") or 0) > 0)
+    ]
+
+    for start in range(0, len(visible), 3):
+        columns = st.columns(3)
+        for column, creative in zip(columns, visible[start : start + 3]):
+            with column.container(border=True):
+                if creative["thumbnail_url"]:
+                    st.image(creative["thumbnail_url"], width="stretch")
+                else:
+                    st.info("Kreatif önizlemesi bulunamadı.")
+
+                st.markdown(f"**{creative['name']}**")
+                st.caption(
+                    f"{creative['creative_type']} | {creative['status']} | "
+                    f"Kreatif ID: {creative['creative_id']}"
+                )
+                priority = creative["creative_priority"]
+                label = creative["creative_label"]
+                if priority == "critical":
+                    st.error(label)
+                elif priority == "high":
+                    st.warning(label)
+                elif label == "Bu kreatif tuttu":
+                    st.success(label)
+                else:
+                    st.info(label)
+
+                metrics = st.columns(4)
+                metrics[0].metric("Harcama", f"₺{creative['spend']:,.0f}")
+                metrics[1].metric("ROAS", f"{creative['roas']:.2f}")
+                metrics[2].metric("CTR", f"%{creative['ctr']:.2f}")
+                metrics[3].metric("Frekans", f"{creative['frequency']:.2f}")
+                if creative["creative_type"] == "Video":
+                    st.caption(
+                        f"Video başlatma: %{creative['video_hook_rate']:.2f} | "
+                        f"%75 izlenme devamlılığı: %{creative['video_hold_rate']:.2f} | "
+                        f"ThruPlay: {creative['video_thruplays']:,.0f}"
+                    )
+                st.markdown(f"**Öneri:** {creative['creative_recommendation']}")
+                st.caption(creative["creative_reason"])
+
+
 def main() -> None:
     st.title("Meta Ads Yönetim Paneli")
     st.caption("Salt okunur analiz paneli. Meta üzerinde değişiklik yapmaz.")
@@ -138,7 +221,11 @@ def main() -> None:
 
     try:
         with st.spinner("Meta raporları yükleniyor..."):
-            data = cached_dashboard_data(start_date, end_date)
+            data = cached_dashboard_data(
+                start_date,
+                end_date,
+                CACHE_SCHEMA_VERSION,
+            )
     except (MetaAPIError, ValueError) as error:
         st.error(f"Panel verileri yüklenemedi: {error}")
         return
@@ -159,8 +246,15 @@ def main() -> None:
     else:
         st.success("Kritik veya yüksek öncelikli aksiyon bulunmadı.")
 
-    overview, campaigns_tab, adsets_tab, ads_tab, actions_tab = st.tabs(
-        ("Genel Bakış", "Kampanyalar", "Reklam Setleri", "Reklamlar", "Öneriler")
+    overview, creatives_tab, campaigns_tab, adsets_tab, ads_tab, actions_tab = st.tabs(
+        (
+            "Genel Bakış",
+            "Kreatifler",
+            "Kampanyalar",
+            "Reklam Setleri",
+            "Reklamlar",
+            "Öneriler",
+        )
     )
     common_metrics = [
         "status",
@@ -179,6 +273,8 @@ def main() -> None:
     ]
     with overview:
         render_charts(data)
+    with creatives_tab:
+        render_creatives(data.get("creatives", []))
     with campaigns_tab:
         render_table("Kampanya Performansı", data["campaigns"], ["id", "name", *common_metrics])
     with adsets_tab:

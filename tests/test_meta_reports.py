@@ -87,6 +87,40 @@ def test_report_rows_include_parent_names() -> None:
     assert row["adset_name"] == "Ad Set"
 
 
+def test_report_rows_include_creative_and_video_metrics() -> None:
+    row = calculate_report_rows(
+        [
+            {
+                "id": "1",
+                "name": "Video Ad",
+                "creative": {
+                    "id": "creative-1",
+                    "name": "Video Creative",
+                    "thumbnail_url": "https://example.invalid/video.jpg",
+                    "object_type": "VIDEO",
+                    "video_id": "video-1",
+                },
+                "insights": {
+                    "data": [
+                        {
+                            "impressions": "1000",
+                            "video_play_actions": [{"value": "400"}],
+                            "video_p75_watched_actions": [{"value": "100"}],
+                            "video_thruplay_watched_actions": [{"value": "80"}],
+                        }
+                    ]
+                },
+            }
+        ]
+    )[0]
+
+    assert row["creative_id"] == "creative-1"
+    assert row["creative_type"] == "Video"
+    assert row["video_hook_rate"] == 40
+    assert row["video_hold_rate"] == 25
+    assert row["video_thruplays"] == 80
+
+
 def test_format_report_contains_readable_table() -> None:
     output = format_report("Test raporu", calculate_report_rows([{"id": "1", "name": "Test"}]))
 

@@ -57,6 +57,7 @@ def test_load_dashboard_data_reuses_existing_report_functions(monkeypatch) -> No
     ]
     assert data["current"]["frequency"] == 2
     assert data["recommendations"] == []
+    assert data["creatives"] == []
 
 
 def test_load_dashboard_data_rejects_invalid_range() -> None:

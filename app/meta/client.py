@@ -23,6 +23,12 @@ ACCOUNT_INSIGHT_FIELDS = (
     "clicks",
     "actions",
     "action_values",
+    "video_play_actions",
+    "video_p25_watched_actions",
+    "video_p50_watched_actions",
+    "video_p75_watched_actions",
+    "video_p95_watched_actions",
+    "video_thruplay_watched_actions",
 )
 REPORT_LEVEL_EDGES = {
     "campaign": "campaigns",
@@ -32,7 +38,10 @@ REPORT_LEVEL_EDGES = {
 REPORT_LEVEL_FIELDS = {
     "campaign": "id,name,status",
     "adset": "id,name,campaign{id,name},status",
-    "ad": "id,name,adset{id,name},campaign{id,name},status",
+    "ad": (
+        "id,name,adset{id,name},campaign{id,name},status,"
+        "creative{id,name,thumbnail_url,object_type,video_id,image_url}"
+    ),
 }
 DEFAULT_TIMEOUT_SECONDS = 15
 

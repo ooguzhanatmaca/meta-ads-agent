@@ -14,6 +14,7 @@ from app.meta.compare_periods import calculate_period_metrics, compare_metrics
 from app.meta.export_excel import build_workbook
 from app.meta.performance_report import calculate_report_rows
 from app.rules.performance_rules import evaluate_ads
+from app.rules.creative_rules import evaluate_creatives
 
 
 TABLE_COLUMNS = {
@@ -78,6 +79,7 @@ def load_dashboard_data(start_date: date, end_date: date) -> dict[str, Any]:
         "adsets": adsets,
         "ads": ads,
         "recommendations": evaluate_ads(ads),
+        "creatives": evaluate_creatives(ads),
         "start_date": start_date,
         "end_date": end_date,
         "previous_start": previous_start,
