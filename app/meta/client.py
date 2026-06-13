@@ -122,6 +122,31 @@ class MetaClient:
             {"time_range": json.dumps({"since": since, "until": until})}
         )
 
+    def get_account_insights_breakdown(
+        self, breakdowns: str, date_preset: str = "last_7d"
+    ) -> list[dict[str, Any]]:
+        """Return account insights split by a breakdown (e.g. age, gender, placement)."""
+        url = (
+            f"https://graph.facebook.com/{self.graph_api_version}/"
+            f"{self.ad_account_id}/insights"
+        )
+        payload = self._get(
+            url,
+            {
+                "fields": ",".join(ACCOUNT_INSIGHT_FIELDS),
+                "level": "account",
+                "breakdowns": breakdowns,
+                "date_preset": date_preset,
+                "limit": "200",
+            },
+        )
+        data = payload.get("data")
+        if not isinstance(data, list) or not all(
+            isinstance(item, dict) for item in data
+        ):
+            raise MetaResponseError("Meta API kırılım verisi beklenen biçimde değil.")
+        return data
+
     def _get_account_insights(self, period_params: dict[str, str]) -> dict[str, Any]:
         url = (
             f"https://graph.facebook.com/{self.graph_api_version}/"
@@ -307,6 +332,15 @@ def get_account_insights(date_preset: str = "last_7d") -> dict[str, Any]:
 def get_account_insights_for_period(since: str, until: str) -> dict[str, Any]:
     """Read account insights for an explicit inclusive date range."""
     return MetaClient.from_env().get_account_insights_for_period(since, until)
+
+
+def get_account_insights_breakdown(
+    breakdowns: str, date_preset: str = "last_7d"
+) -> list[dict[str, Any]]:
+    """Read account insights split by a breakdown for the configured account."""
+    return MetaClient.from_env().get_account_insights_breakdown(
+        breakdowns, date_preset
+    )
 
 
 def get_performance_report(

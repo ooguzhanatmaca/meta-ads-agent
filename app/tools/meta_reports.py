@@ -5,12 +5,15 @@ Meta API errors are caught and returned as a message so the agent can explain
 the problem to the user instead of crashing.
 """
 
+from typing import Any
+
 from agents import function_tool
 
 from app.meta.account_summary import calculate_summary, format_summary
 from app.meta.client import (
     MetaAPIError,
     get_account_insights,
+    get_account_insights_breakdown,
     get_performance_report,
     test_meta_connection,
 )
@@ -18,6 +21,8 @@ from app.meta.compare_periods import build_period_comparison
 from app.meta.executive_summary import build_executive_summary
 from app.meta.performance_report import calculate_report_rows, format_report
 from app.meta.recommendations import format_recommendations
+from app.rules.budget_rules import budget_suggestions
+from app.rules.creative_rules import evaluate_creatives
 from app.rules.performance_rules import evaluate_ads
 
 
@@ -26,6 +31,60 @@ REPORT_TITLES = {
     "adset": "Reklam seti raporu",
     "ad": "Reklam raporu",
 }
+
+# Türkçe/İngilizce kırılım adı -> Meta API breakdowns parametresi.
+BREAKDOWN_MAP = {
+    "age": "age",
+    "yaş": "age",
+    "yas": "age",
+    "gender": "gender",
+    "cinsiyet": "gender",
+    "age_gender": "age,gender",
+    "yaş_cinsiyet": "age,gender",
+    "yas_cinsiyet": "age,gender",
+    "placement": "publisher_platform,platform_position",
+    "yerleşim": "publisher_platform,platform_position",
+    "yerlesim": "publisher_platform,platform_position",
+    "platform": "publisher_platform",
+    "country": "country",
+    "ülke": "country",
+    "ulke": "country",
+    "region": "region",
+    "bölge": "region",
+    "bolge": "region",
+    "device": "device_platform",
+    "cihaz": "device_platform",
+}
+
+# Kırılım satırlarında ölçüm dışı (boyut) anahtarları.
+BREAKDOWN_KEYS = (
+    "age",
+    "gender",
+    "country",
+    "region",
+    "publisher_platform",
+    "platform_position",
+    "device_platform",
+    "impression_device",
+)
+
+
+def _cell(value: Any, width: int) -> str:
+    text = str(value)
+    if len(text) > width:
+        text = f"{text[: width - 1]}…"
+    return text.ljust(width)
+
+
+def _table(title: str, headers: tuple, widths: tuple, rows: list[tuple]) -> str:
+    if not rows:
+        return f"{title}\nKayıt bulunamadı."
+    header = " | ".join(_cell(h, w) for h, w in zip(headers, widths))
+    separator = "-+-".join("-" * w for w in widths)
+    body = [
+        " | ".join(_cell(v, w) for v, w in zip(row, widths)) for row in rows
+    ]
+    return "\n".join((title, header, separator, *body))
 
 
 @function_tool
@@ -39,51 +98,182 @@ def check_meta_connection() -> str:
 
 
 @function_tool
-def get_account_summary() -> str:
-    """Son 7 günlük hesap performans özetini döndürür.
+def get_account_summary(date_preset: str = "last_7d") -> str:
+    """Hesap performans özetini döndürür (harcama, CTR, CPC, CPM, CPA, ROAS vb.).
 
-    Harcama, gösterim, erişim, tıklama, CTR, CPC, CPM, satın alma, CPA ve ROAS
-    metriklerini içerir.
+    Args:
+        date_preset: Meta tarih ön ayarı. Örn: today, yesterday, last_7d,
+            last_14d, last_30d, last_90d, this_month, last_month, this_year.
     """
     try:
-        summary = calculate_summary(get_account_insights("last_7d"))
+        summary = calculate_summary(get_account_insights(date_preset))
     except MetaAPIError as error:
         return f"Hesap özeti alınamadı: {error}"
     return format_summary(summary)
 
 
 @function_tool
-def get_performance_report_by_level(level: str) -> str:
-    """Belirtilen seviye için son 7 günlük performans raporunu döndürür.
+def get_performance_report_by_level(level: str, date_preset: str = "last_7d") -> str:
+    """Belirtilen seviye için performans raporunu döndürür.
 
     Args:
         level: "campaign" (kampanya), "adset" (reklam seti) veya "ad" (reklam).
+        date_preset: Meta tarih ön ayarı (örn. last_7d, last_30d, this_month).
     """
     if level not in REPORT_TITLES:
-        return (
-            "Geçersiz seviye. Geçerli değerler: 'campaign', 'adset', 'ad'."
-        )
+        return "Geçersiz seviye. Geçerli değerler: 'campaign', 'adset', 'ad'."
     title = REPORT_TITLES[level]
     try:
-        entities = get_performance_report(level, "last_7d")
+        entities = get_performance_report(level, date_preset)
     except MetaAPIError as error:
         return f"{title} alınamadı: {error}"
     return format_report(title, calculate_report_rows(entities))
 
 
 @function_tool
-def get_ad_recommendations() -> str:
-    """Son 7 günlük reklam verisine dayalı kural tabanlı önerileri döndürür.
+def get_ad_recommendations(date_preset: str = "last_7d") -> str:
+    """Reklam verisine dayalı kural tabanlı performans önerilerini döndürür.
 
     Kapatılmaya aday, bütçesi artırılabilir ve kreatif yorgunluğu olan
-    reklamları, gerekçe ve öncelik bilgisiyle birlikte listeler.
+    reklamları, gerekçe ve öncelik bilgisiyle listeler.
+
+    Args:
+        date_preset: Meta tarih ön ayarı (örn. last_7d, last_30d).
     """
     try:
-        entities = get_performance_report("ad", "last_7d")
+        entities = get_performance_report("ad", date_preset)
     except MetaAPIError as error:
         return f"Reklam önerileri oluşturulamadı: {error}"
     ad_rows = calculate_report_rows(entities)
     return format_recommendations(evaluate_ads(ad_rows))
+
+
+@function_tool
+def get_creative_analysis(date_preset: str = "last_7d", limit: int = 15) -> str:
+    """Reklam kreatiflerinin yorgunluk ve sağlık analizini döndürür.
+
+    Her reklam için sağlık skoru, durum (Sağlıklı/Riskli/Zayıf) ve kreatif
+    aksiyonu (yorulan kreatifi değiştir, kazananı koru vb.) üretir.
+
+    Args:
+        date_preset: Meta tarih ön ayarı (örn. last_7d, last_30d).
+        limit: Listelenecek maksimum reklam sayısı.
+    """
+    try:
+        entities = get_performance_report("ad", date_preset)
+    except MetaAPIError as error:
+        return f"Kreatif analizi oluşturulamadı: {error}"
+    results = evaluate_creatives(calculate_report_rows(entities))[: max(1, limit)]
+    rows = [
+        (
+            item["name"],
+            f"{item['spend']:.2f}",
+            f"{item['roas']:.2f}",
+            f"{item['frequency']:.2f}",
+            f"{item['health_score']}/100",
+            item["health_status"],
+            item["creative_label"],
+            item["creative_recommendation"],
+        )
+        for item in results
+    ]
+    return _table(
+        "Kreatif yorgunluk ve sağlık analizi",
+        ("Reklam", "Harcama", "ROAS", "Frekans", "Sağlık", "Durum", "Etiket", "Öneri"),
+        (22, 10, 7, 8, 8, 9, 22, 40),
+        rows,
+    )
+
+
+@function_tool
+def get_budget_suggestions(level: str = "campaign", date_preset: str = "last_7d") -> str:
+    """Sayısal bütçe önerileri döndürür (önerilen günlük bütçe dahil).
+
+    Yüksek ROAS + düşük frekanslı varlıklara artış, verimsizlere azaltma/durdurma
+    önerir. Önerilen günlük bütçe, dönemdeki ortalama günlük harcamadan türetilir.
+    Bu yalnızca tavsiyedir; bütçeyi değiştirmez.
+
+    Args:
+        level: "campaign", "adset" veya "ad".
+        date_preset: Meta tarih ön ayarı (örn. last_7d, last_30d).
+    """
+    if level not in REPORT_TITLES:
+        return "Geçersiz seviye. Geçerli değerler: 'campaign', 'adset', 'ad'."
+    window = {"last_7d": 7, "last_14d": 14, "last_30d": 30, "last_90d": 90}.get(
+        date_preset, 7
+    )
+    try:
+        entities = get_performance_report(level, date_preset)
+    except MetaAPIError as error:
+        return f"Bütçe önerileri oluşturulamadı: {error}"
+    suggestions = budget_suggestions(calculate_report_rows(entities), window)
+    rows = [
+        (
+            s["name"],
+            f"{s['spend']:.2f}",
+            f"{s['roas']:.2f}",
+            f"{s['frequency']:.2f}",
+            s["action"],
+            f"%{s['change_pct']:+d}",
+            f"{s['suggested_daily']:.2f}",
+            s["reason"],
+        )
+        for s in suggestions
+    ]
+    return _table(
+        f"Bütçe önerileri ({level})",
+        ("Varlık", "Harcama", "ROAS", "Frekans", "Aksiyon", "Değişim", "Öneri Günlük", "Gerekçe"),
+        (22, 10, 7, 8, 22, 8, 13, 42),
+        rows,
+    )
+
+
+@function_tool
+def get_breakdown_report(dimension: str, date_preset: str = "last_7d") -> str:
+    """Hesap performansını bir boyuta göre kırarak döndürür.
+
+    Args:
+        dimension: Kırılım boyutu. Örn: "age" (yaş), "gender" (cinsiyet),
+            "age_gender" (yaş+cinsiyet), "placement" (yerleşim), "platform",
+            "country" (ülke), "region" (bölge), "device" (cihaz).
+        date_preset: Meta tarih ön ayarı (örn. last_7d, last_30d).
+    """
+    breakdowns = BREAKDOWN_MAP.get(dimension.strip().lower())
+    if breakdowns is None:
+        return (
+            "Geçersiz boyut. Örnekler: age, gender, age_gender, placement, "
+            "platform, country, region, device."
+        )
+    try:
+        data = get_account_insights_breakdown(breakdowns, date_preset)
+    except MetaAPIError as error:
+        return f"Kırılım raporu alınamadı: {error}"
+
+    rows = []
+    for item in data:
+        label = " / ".join(
+            str(item[k]) for k in BREAKDOWN_KEYS if item.get(k) is not None
+        )
+        m = calculate_summary(item)
+        rows.append(
+            (
+                label or "-",
+                f"{m['spend']:.2f}",
+                f"{m['impressions']:.0f}",
+                f"{m['clicks']:.0f}",
+                f"%{m['ctr']:.2f}",
+                f"{m['purchases']:.0f}",
+                f"{m['roas']:.2f}",
+                f"{m['cpa']:.2f}",
+            )
+        )
+    rows.sort(key=lambda r: float(r[1]), reverse=True)
+    return _table(
+        f"Kırılım raporu: {dimension}",
+        ("Kırılım", "Harcama", "Gösterim", "Tıklama", "CTR", "Satın Alma", "ROAS", "CPA"),
+        (26, 11, 11, 10, 9, 11, 9, 9),
+        rows,
+    )
 
 
 @function_tool

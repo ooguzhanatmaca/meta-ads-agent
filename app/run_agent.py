@@ -13,6 +13,8 @@ async def main() -> None:
     print("Meta Ads Agent başlatıldı.")
     print("Çıkmak için 'çık' yazabilirsin.\n")
 
+    history: list = []  # önceki turların konuşma geçmişi
+
     while True:
         user_message = input("Sen: ").strip()
 
@@ -23,13 +25,17 @@ async def main() -> None:
         if not user_message:
             continue
 
+        turn_input = history + [{"role": "user", "content": user_message}]
+
+        print("Analiz ediliyor...")
         try:
-            run = await run_with_fallback(meta_ads_agent, user_message)
+            run = await run_with_fallback(meta_ads_agent, turn_input)
 
             if run.provider != "openai":
-                print(f"(OpenAI kotası dolu — {run.provider} ile yanıtlanıyor.)")
+                print(f"({run.provider} ile yanıtlanıyor.)")
 
             print(f"\nMeta Ads Agent:\n{run.result.final_output}\n")
+            history = run.result.to_input_list()
 
         except Exception as error:
             print(f"\nHata oluştu: {error}\n")

@@ -15,67 +15,71 @@ def _rate_limit_error() -> openai.RateLimitError:
     return openai.RateLimitError("insufficient_quota", response=response, body=None)
 
 
-def test_uses_openai_when_no_error() -> None:
-    expected = MagicMock(final_output="OpenAI yanıtı")
+def test_runs_on_primary_gemini(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PRIMARY_MODEL", "gemini/gemini-3.5-flash")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    mf._model_cache.clear()
+    expected = MagicMock(final_output="Gemini yanıtı")
 
     async def fake_run(agent, user_input, **kwargs):
+        # Birincil model RunConfig ile geçilmeli.
+        assert kwargs["run_config"].model is mf._get_litellm_model(
+            "gemini/gemini-3.5-flash"
+        )
         return expected
 
     with patch.object(mf.Runner, "run", side_effect=fake_run):
         run = asyncio.run(mf.run_with_fallback("AGENT", "merhaba"))
 
-    assert run.provider == "openai"
+    assert run.provider == "gemini"
     assert run.result is expected
 
 
-def test_falls_back_to_gemini_on_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("FALLBACK_MODEL", "gemini/gemini-3.5-flash")
+def test_falls_back_to_openai_on_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PRIMARY_MODEL", "gemini/gemini-3.5-flash")
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-    mf._fallback_model = None  # reset cache
+    monkeypatch.setenv("FALLBACK_MODEL", "openai")
+    mf._model_cache.clear()
 
     calls: list[dict] = []
-    fallback_result = MagicMock(final_output="Gemini yanıtı")
+    openai_result = MagicMock(final_output="OpenAI yanıtı")
 
     async def fake_run(agent, user_input, **kwargs):
         calls.append(kwargs)
         if len(calls) == 1:
             raise _rate_limit_error()
-        return fallback_result
+        return openai_result
 
     with patch.object(mf.Runner, "run", side_effect=fake_run):
         run = asyncio.run(mf.run_with_fallback("AGENT", "merhaba"))
 
-    assert run.provider == "gemini"
-    assert run.result is fallback_result
+    assert run.provider == "openai"
+    assert run.result is openai_result
     assert len(calls) == 2
-    # İkinci çağrı fallback modelini RunConfig ile geçmeli.
-    assert calls[1]["run_config"].model is mf._get_fallback_model()
+    # Fallback OpenAI default → run_config geçilmemeli.
+    assert "run_config" not in calls[1]
 
 
-def test_falls_back_to_claude_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("FALLBACK_MODEL", "anthropic/claude-opus-4-8")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
-    mf._fallback_model = None  # reset cache
+def test_non_rate_limit_error_is_raised(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PRIMARY_MODEL", "gemini/gemini-3.5-flash")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    mf._model_cache.clear()
 
     async def fake_run(agent, user_input, **kwargs):
-        if not getattr(fake_run, "called", False):
-            fake_run.called = True
-            raise _rate_limit_error()
-        return MagicMock(final_output="Claude yanıtı")
+        raise ValueError("beklenmeyen hata")
 
     with patch.object(mf.Runner, "run", side_effect=fake_run):
-        run = asyncio.run(mf.run_with_fallback("AGENT", "merhaba"))
+        with pytest.raises(ValueError, match="beklenmeyen hata"):
+            asyncio.run(mf.run_with_fallback("AGENT", "merhaba"))
 
-    assert run.provider == "anthropic"
 
-
-def test_fallback_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("FALLBACK_MODEL", "gemini/gemini-3.5-flash")
+def test_primary_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PRIMARY_MODEL", "gemini/gemini-3.5-flash")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    mf._fallback_model = None  # reset cache
+    mf._model_cache.clear()
 
     async def fake_run(agent, user_input, **kwargs):
-        raise _rate_limit_error()
+        return MagicMock()
 
     with patch.object(mf.Runner, "run", side_effect=fake_run):
         with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
