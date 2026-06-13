@@ -15,6 +15,9 @@ from app.tools.meta_reports import (
     get_performance_report_by_level,
     get_period_comparison,
     get_trend,
+    get_weekly_digest,
+    export_excel_report,
+    simulate_change,
 )
 
 
@@ -60,6 +63,9 @@ meta_ads_agent = Agent(
     - Yaş/cinsiyet/yerleşim/platform/ülke/cihaz kırılımı: get_breakdown_report
     - "Sorun var mı / dikkat etmem gereken bir şey": get_anomaly_alerts
     - "Son X günde nasıl gidiyor / trend / yükseliyor mu düşüyor mu / grafik": get_trend
+    - "Ne olur / şu kampanyanın bütçesini artırsam/kapatsam ne olur" senaryoları: simulate_change
+    - "Haftalık özet / bu hafta nasıldı": get_weekly_digest
+    - "Excel raporu çıkar / dosya olarak ver": export_excel_report
     - İki dönemi karşılaştırma (bugün/dün vb.): get_period_comparison
     - Kapsamlı tam rapor: get_executive_summary
     - Hesap kimliği/para birimi: get_meta_ad_account_info
@@ -83,6 +89,9 @@ meta_ads_agent = Agent(
         get_breakdown_report,
         get_anomaly_alerts,
         get_trend,
+        simulate_change,
+        get_weekly_digest,
+        export_excel_report,
         get_period_comparison,
         get_executive_summary,
     ],

@@ -21,6 +21,9 @@ from app.meta.client import (
 from app.meta.compare_periods import build_period_comparison
 from app.meta.creative_vision import critique_image
 from app.meta.executive_summary import build_executive_summary
+from app.meta.export_excel import export_excel
+from app.meta.simulation import build_simulation
+from app.meta.weekly_digest import build_weekly_digest
 from app.meta.performance_report import calculate_report_rows, format_report
 from app.meta.recommendations import format_recommendations
 from app.meta.trends import build_trend_report
@@ -396,6 +399,55 @@ def get_period_comparison() -> str:
         return build_period_comparison()
     except MetaAPIError as error:
         return f"Dönem karşılaştırması alınamadı: {error}"
+
+
+@function_tool
+def simulate_change(
+    target_name: str,
+    change_pct: float = 0.0,
+    pause: bool = False,
+    level: str = "campaign",
+    date_preset: str = "last_7d",
+) -> str:
+    """"Ne olur?" senaryosu: bir varlığın bütçesini değiştirmenin/kapatmanın
+    hesap geneline tahmini etkisini (öncesi→sonrası) hesaplar. Bu bir tahmindir,
+    hiçbir şeyi değiştirmez.
+
+    Args:
+        target_name: Etkilenecek kampanya/reklam seti/reklam adı (kısmi ad olur).
+        change_pct: Bütçe değişimi yüzdesi (ör. +30 artış, -20 azalış). pause=True ise yok sayılır.
+        pause: True ise varlığı kapatma senaryosu simüle edilir.
+        level: "campaign", "adset" veya "ad".
+        date_preset: Meta tarih ön ayarı (örn. last_7d, last_30d).
+    """
+    if level not in REPORT_TITLES:
+        return "Geçersiz seviye. Geçerli değerler: 'campaign', 'adset', 'ad'."
+    try:
+        return build_simulation(target_name, change_pct, pause, level, date_preset)
+    except MetaAPIError as error:
+        return f"Simülasyon yapılamadı: {error}"
+
+
+@function_tool
+def get_weekly_digest() -> str:
+    """Akıllı haftalık özet: bu hafta vs geçen hafta + en iyi/kötü reklamlar + uyarılar."""
+    try:
+        return build_weekly_digest()
+    except MetaAPIError as error:
+        return f"Haftalık özet oluşturulamadı: {error}"
+
+
+@function_tool
+def export_excel_report() -> str:
+    """Kapsamlı raporu Excel (.xlsx) dosyası olarak kaydeder ve dosya yolunu döndürür.
+
+    Kullanıcı 'Excel raporu çıkar / dosya olarak ver' dediğinde kullan.
+    """
+    try:
+        path = export_excel()
+    except MetaAPIError as error:
+        return f"Excel raporu oluşturulamadı: {error}"
+    return f"Excel raporu kaydedildi: {path}"
 
 
 @function_tool
