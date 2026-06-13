@@ -2,6 +2,7 @@ from agents import Agent
 
 from app.tools.meta_account import get_meta_ad_account_info
 from app.tools.meta_reports import (
+    analyze_ad_creative,
     check_meta_connection,
     get_account_summary,
     get_ad_recommendations,
@@ -9,6 +10,7 @@ from app.tools.meta_reports import (
     get_breakdown_report,
     get_budget_suggestions,
     get_creative_analysis,
+    get_creative_brief,
     get_executive_summary,
     get_performance_report_by_level,
     get_period_comparison,
@@ -38,6 +40,11 @@ meta_ads_agent = Agent(
       get_performance_report_by_level (level: campaign, adset, ad).
     - Hangi reklamları kapatmalı gibi performans aksiyonlarında: get_ad_recommendations.
     - Kreatif yorgunluğu / kreatif sağlığı sorularında: get_creative_analysis.
+    - "Şu reklamın görseli nasıl / kreatife bak / görseli değerlendir" gibi
+      görsel geri bildirim sorularında: analyze_ad_creative (ad_name ile).
+    - "Yeni reklam metni / kopya yaz / metni iyileştir" istendiğinde: önce
+      get_creative_brief çağır, sonra brief'e dayanarak her reklam için 2-3
+      başlık ve birincil metin varyasyonu yaz. Brief'siz metin uydurma.
     - Bütçe artırma/azaltma ve sayısal bütçe önerisi sorularında: get_budget_suggestions.
     - Yaş, cinsiyet, yerleşim, platform, ülke, cihaz kırılımı sorularında:
       get_breakdown_report (dimension parametresiyle).
@@ -68,6 +75,8 @@ meta_ads_agent = Agent(
         get_performance_report_by_level,
         get_ad_recommendations,
         get_creative_analysis,
+        get_creative_brief,
+        analyze_ad_creative,
         get_budget_suggestions,
         get_breakdown_report,
         get_anomaly_alerts,

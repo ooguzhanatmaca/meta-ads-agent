@@ -19,6 +19,7 @@ from app.meta.client import (
     test_meta_connection,
 )
 from app.meta.compare_periods import build_period_comparison
+from app.meta.creative_vision import critique_image
 from app.meta.executive_summary import build_executive_summary
 from app.meta.performance_report import calculate_report_rows, format_report
 from app.meta.recommendations import format_recommendations
@@ -275,6 +276,86 @@ def get_breakdown_report(dimension: str, date_preset: str = "last_7d") -> str:
         (26, 11, 11, 10, 9, 11, 9, 9),
         rows,
     )
+
+
+def _find_ad(rows: list[dict[str, Any]], ad_name: str) -> dict[str, Any] | None:
+    """Find an ad row by (case-insensitive) name match; prefer exact, else contains."""
+    query = ad_name.strip().lower()
+    for row in rows:
+        if str(row.get("name", "")).lower() == query:
+            return row
+    for row in rows:
+        if query in str(row.get("name", "")).lower():
+            return row
+    return None
+
+
+@function_tool
+def get_creative_brief(date_preset: str = "last_7d", limit: int = 5) -> str:
+    """Kreatif aksiyonu gereken reklamlar için metrik + kural tabanlı kreatif brief döndürür.
+
+    Çıktıdaki hook/açı/format/kanıt/CTA önerilerine dayanarak yeni reklam metni
+    (başlık + birincil metin) varyasyonları yazabilirsin.
+
+    Args:
+        date_preset: Meta tarih ön ayarı (örn. last_7d, last_30d).
+        limit: Brief üretilecek maksimum reklam sayısı.
+    """
+    try:
+        entities = get_performance_report("ad", date_preset)
+    except MetaAPIError as error:
+        return f"Kreatif brief oluşturulamadı: {error}"
+    results = evaluate_creatives(calculate_report_rows(entities))[: max(1, limit)]
+    blocks = []
+    for item in results:
+        brief = item.get("creative_brief", {})
+        blocks.append(
+            "\n".join(
+                (
+                    f"Reklam: {item['name']}",
+                    f"  Tür: {item.get('creative_type', '-')} | ROAS: {item['roas']:.2f} | "
+                    f"CTR: %{item['ctr']:.2f} | Frekans: {item['frequency']:.2f}",
+                    f"  Durum: {item['creative_label']} — {item['creative_recommendation']}",
+                    f"  Hook: {brief.get('hook', '-')}",
+                    f"  Açı: {brief.get('angle', '-')}",
+                    f"  Format: {brief.get('format', '-')}",
+                    f"  Kanıt: {brief.get('proof', '-')}",
+                    f"  CTA: {brief.get('cta', '-')}",
+                )
+            )
+        )
+    if not blocks:
+        return "Kreatif brief için reklam bulunamadı."
+    return "Kreatif brief (yeni metin yazmak için kullan):\n\n" + "\n\n".join(blocks)
+
+
+@function_tool
+def analyze_ad_creative(ad_name: str, date_preset: str = "last_7d") -> str:
+    """Bir reklamın görseline bakıp kreatif geri bildirim verir (Gemini görsel analizi).
+
+    Args:
+        ad_name: Reklamın adı (kısmi ad da kabul edilir).
+        date_preset: Meta tarih ön ayarı (örn. last_7d, last_30d).
+    """
+    try:
+        rows = calculate_report_rows(get_performance_report("ad", date_preset))
+    except MetaAPIError as error:
+        return f"Reklam verisi alınamadı: {error}"
+
+    match = _find_ad(rows, ad_name)
+    if match is None:
+        return f"'{ad_name}' adlı reklam bulunamadı."
+    image_url = match.get("thumbnail_url")
+    if not image_url:
+        return (
+            f"'{match['name']}' için görsel bulunamadı "
+            "(video önizlemesi olmayabilir)."
+        )
+    try:
+        critique = critique_image(image_url)
+    except Exception as error:  # noqa: BLE001
+        return f"Görsel analizi yapılamadı: {error}"
+    return f"Reklam: {match['name']}\n\n{critique}"
 
 
 @function_tool
