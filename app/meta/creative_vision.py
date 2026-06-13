@@ -10,7 +10,7 @@ import os
 import requests
 
 
-DEFAULT_VISION_MODEL = "gemini/gemini-2.0-flash"
+DEFAULT_VISION_MODEL = "gemini/gemini-2.5-flash"
 DOWNLOAD_TIMEOUT_SECONDS = 20
 
 CRITIQUE_PROMPT = """Sen deneyimli bir performans pazarlama kreatif uzmanısın.

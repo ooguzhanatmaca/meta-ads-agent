@@ -24,9 +24,8 @@ from agents import RunConfig, Runner
 MAX_RETRY_WAIT_SECONDS = 20.0
 
 
-# gemini-2.0-flash ücretsiz katmanda çok daha yüksek günlük limite sahip.
-DEFAULT_PRIMARY_MODEL = "gemini/gemini-2.0-flash"
-DEFAULT_FALLBACK_MODELS = "gemini/gemini-2.5-flash,openai"
+DEFAULT_PRIMARY_MODEL = "gemini/gemini-2.5-flash"
+DEFAULT_FALLBACK_MODELS = "gemini/gemini-flash-latest,gemini/gemini-2.5-pro,openai"
 OPENAI_SENTINEL = "openai"
 
 PROVIDER_API_KEY_ENV = {
@@ -77,6 +76,9 @@ def _is_provider_glitch(exc: Exception) -> bool:
         or "tool_use_failed" in text
         or "failed to call a function" in text
         or "did not match schema" in text
+        or "no longer available" in text
+        or "not_found" in text
+        or "404" in text
     )
 
 
