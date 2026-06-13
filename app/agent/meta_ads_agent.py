@@ -4,6 +4,7 @@ from app.tools.meta_account import get_meta_ad_account_info
 from app.tools.meta_reports import (
     analyze_ad_creative,
     check_meta_connection,
+    diagnose_change,
     get_account_summary,
     get_ad_recommendations,
     get_anomaly_alerts,
@@ -66,6 +67,7 @@ meta_ads_agent = Agent(
       her reklam için 2-3 başlık ve birincil metin varyasyonu yaz (brief'siz uydurma)
     - Sayısal bütçe önerisi: get_budget_suggestions
     - Yaş/cinsiyet/yerleşim/platform/ülke/cihaz kırılımı: get_breakdown_report
+    - "Neden düştü/arttı / sebebi ne / kök neden" sorularında: diagnose_change
     - "Sorun var mı / dikkat etmem gereken bir şey": get_anomaly_alerts
     - "Son X günde nasıl gidiyor / trend / yükseliyor mu düşüyor mu / grafik": get_trend
     - "Ne olur / şu kampanyanın bütçesini artırsam/kapatsam ne olur" senaryoları: simulate_change
@@ -92,6 +94,7 @@ meta_ads_agent = Agent(
         analyze_ad_creative,
         get_budget_suggestions,
         get_breakdown_report,
+        diagnose_change,
         get_anomaly_alerts,
         get_trend,
         simulate_change,

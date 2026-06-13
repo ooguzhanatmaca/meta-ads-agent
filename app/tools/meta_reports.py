@@ -20,6 +20,7 @@ from app.meta.client import (
 )
 from app.meta.compare_periods import build_period_comparison
 from app.meta.creative_vision import critique_image
+from app.meta.diagnosis import build_diagnosis
 from app.meta.executive_summary import build_executive_summary
 from app.meta.export_excel import export_excel
 from app.meta.simulation import build_simulation
@@ -360,6 +361,21 @@ def analyze_ad_creative(ad_name: str, date_preset: str = "last_7d") -> str:
     except Exception as error:  # noqa: BLE001
         return f"Görsel analizi yapılamadı: {error}"
     return f"Reklam: {match['name']}\n\n{critique}"
+
+
+@function_tool
+def diagnose_change() -> str:
+    """Kök neden analizi: bir metrik (ROAS, CPA vb.) neden değişti sorusunu yanıtlar.
+
+    Son 7 gün ile önceki 7 günü karşılaştırıp olası nedenleri kanıtlarıyla sıralar,
+    ortalamayı aşağı çeken varlıkları listeler ve veriden görülemeyen (kullanıcının
+    kontrol etmesi gereken) dış faktörleri belirtir. "Neden düştü/arttı", "sebebi ne"
+    gibi sorularda kullan.
+    """
+    try:
+        return build_diagnosis()
+    except MetaAPIError as error:
+        return f"Kök neden analizi yapılamadı: {error}"
 
 
 @function_tool
