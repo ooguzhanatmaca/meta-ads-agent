@@ -6,6 +6,7 @@ from app.tools.meta_write import (
     clone_ad_set_tool,
     create_ad_set_tool,
     create_ad_tool,
+    create_lookalike_audience_tool,
     create_paused_campaign,
     pause_entity,
     update_daily_budget,
@@ -26,6 +27,7 @@ from app.tools.meta_reports import (
     get_performance_report_by_level,
     get_period_comparison,
     get_trend,
+    list_custom_audiences,
     get_weekly_digest,
     export_excel_report,
     simulate_change,
@@ -76,6 +78,8 @@ meta_ads_agent = Agent(
       (kampanya id'siyle) → create_ad_tool (reklam seti id'si + mevcut creative_id).
       Her adımda dönen id'yi bir sonrakinde kullan. Reklam için mevcut bir
       creative_id gerekir (reklam raporundan alınabilir).
+    - Benzer (lookalike) kitle: önce list_custom_audiences ile kaynak kitleyi
+      belirle, sonra create_lookalike_audience_tool ile oluştur.
     - VERİ ODAKLI OLUŞTURMA (tercih edilen): Kullanıcı "en iyiye göre/kazanana göre
       yeni set kur", "başarılıyı çoğalt/ölçekle" derse: önce get_performance_report_by_level
       ("adset") ile en yüksek ROAS'lı seti belirle, sonra clone_ad_set_tool ile onun
@@ -118,6 +122,7 @@ meta_ads_agent = Agent(
         get_meta_ad_account_info,
         check_meta_connection,
         find_opportunities,
+        list_custom_audiences,
         get_account_summary,
         get_performance_report_by_level,
         get_ad_recommendations,
@@ -138,6 +143,7 @@ meta_ads_agent = Agent(
         create_ad_set_tool,
         clone_ad_set_tool,
         create_ad_tool,
+        create_lookalike_audience_tool,
         pause_entity,
         activate_entity,
         update_daily_budget,

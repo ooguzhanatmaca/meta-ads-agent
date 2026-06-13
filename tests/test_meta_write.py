@@ -163,3 +163,27 @@ def test_clone_blocked_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
         out = mw._clone_ad_set("1", "Kopya")
     assert clone.called is False
     assert "KAPALI" in out
+
+
+def test_lookalike_creates_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    with patch.object(mw, "create_lookalike_audience", return_value={"id": "aud_1"}) as create:
+        out = mw._create_lookalike_audience("src_1", "Benzer Kitle", "TR", 0.02)
+    create.assert_called_once_with("src_1", "Benzer Kitle", "TR", 0.02)
+    assert "aud_1" in out
+
+
+def test_lookalike_rejects_bad_ratio(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    with patch.object(mw, "create_lookalike_audience") as create:
+        out = mw._create_lookalike_audience("src_1", "X", "TR", 0.5)
+    assert create.called is False
+    assert "ratio" in out.lower() or "oran" in out.lower()
+
+
+def test_lookalike_blocked_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "false")
+    with patch.object(mw, "create_lookalike_audience") as create:
+        out = mw._create_lookalike_audience("src_1", "X")
+    assert create.called is False
+    assert "KAPALI" in out

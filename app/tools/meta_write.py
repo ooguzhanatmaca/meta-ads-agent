@@ -19,6 +19,7 @@ from app.meta.client import (
     create_ad,
     create_ad_set,
     create_campaign,
+    create_lookalike_audience,
     set_daily_budget,
     set_entity_status,
 )
@@ -107,6 +108,27 @@ def _create_ad_set(
     return (
         f"Reklam seti DURAKLATILMIŞ olarak oluşturuldu (id: {result.get('id')}). "
         f"Günlük bütçe {daily_budget_try:.2f} TL, hedef ülke {country}, yaş {age_min}-{age_max}."
+    )
+
+
+def _create_lookalike_audience(
+    source_audience_id: str,
+    name: str,
+    country: str = "TR",
+    ratio: float = 0.01,
+) -> str:
+    if not _writes_enabled():
+        return DISABLED_MESSAGE
+    if not 0.01 <= ratio <= 0.20:
+        return "Oran (ratio) 0.01 ile 0.20 arasında olmalı (%1-%20)."
+    try:
+        result = create_lookalike_audience(source_audience_id, name, country, ratio)
+    except MetaAPIError as error:
+        return f"Benzer kitle oluşturulamadı: {error}"
+    return (
+        f"Benzer (lookalike) kitle oluşturuldu (id: {result.get('id')}); "
+        f"kaynak {source_audience_id}, {country} %{ratio * 100:.0f}. "
+        "Kitle hazır olunca reklam setlerinde hedefleyebilirsiniz."
     )
 
 
@@ -224,6 +246,27 @@ def create_ad_set_tool(
         campaign_id, name, daily_budget_try, optimization_goal, country,
         age_min, age_max, pixel_id, custom_event_type,
     )
+
+
+@function_tool
+def create_lookalike_audience_tool(
+    source_audience_id: str,
+    name: str,
+    country: str = "TR",
+    ratio: float = 0.01,
+) -> str:
+    """Mevcut bir kaynak kitleden benzer (lookalike) kitle oluşturur.
+
+    Önce list_custom_audiences ile kaynak kitlenin id'sini belirle. Kitle sadece
+    tanımdır (harcama yapmaz) ama yine de kullanıcının açık onayıyla çağır.
+
+    Args:
+        source_audience_id: Baz alınacak kaynak kitlenin ID'si.
+        name: Yeni benzer kitlenin adı.
+        country: Hedef ülke kodu (ör. TR).
+        ratio: Benzerlik oranı 0.01-0.20 (%1-%20; düşük = daha benzer/dar).
+    """
+    return _create_lookalike_audience(source_audience_id, name, country, ratio)
 
 
 @function_tool

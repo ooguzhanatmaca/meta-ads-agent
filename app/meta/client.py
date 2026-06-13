@@ -421,6 +421,50 @@ class MetaClient:
         "optimization_goal,bid_strategy,bid_amount,targeting,promoted_object"
     )
 
+    def get_custom_audiences(self) -> list[dict[str, Any]]:
+        """List existing custom/lookalike audiences (sources for new lookalikes)."""
+        url = (
+            f"https://graph.facebook.com/{self.graph_api_version}/"
+            f"{self.ad_account_id}/customaudiences"
+        )
+        payload = self._get(
+            url,
+            {
+                "fields": "id,name,subtype,approximate_count_lower_bound,description",
+                "limit": "200",
+            },
+        )
+        data = payload.get("data")
+        if not isinstance(data, list) or not all(
+            isinstance(item, dict) for item in data
+        ):
+            raise MetaResponseError("Meta API kitle verisi beklenen biçimde değil.")
+        return data
+
+    def create_lookalike_audience(
+        self,
+        source_audience_id: str,
+        name: str,
+        country: str = "TR",
+        ratio: float = 0.01,
+    ) -> dict[str, Any]:
+        """Create a lookalike audience from an existing source audience."""
+        url = (
+            f"https://graph.facebook.com/{self.graph_api_version}/"
+            f"{self.ad_account_id}/customaudiences"
+        )
+        return self._post(
+            url,
+            {
+                "name": name,
+                "subtype": "LOOKALIKE",
+                "origin_audience_id": source_audience_id,
+                "lookalike_spec": json.dumps(
+                    {"type": "similarity", "country": country, "ratio": ratio}
+                ),
+            },
+        )
+
     def get_ad_set(self, adset_id: str) -> dict[str, Any]:
         """Read an ad set's full configuration (targeting, budget, optimization...)."""
         url = f"https://graph.facebook.com/{self.graph_api_version}/{adset_id}"
@@ -605,6 +649,20 @@ def create_ad_set(
 def create_ad(adset_id: str, name: str, creative_id: str) -> dict[str, Any]:
     """Create a PAUSED ad in an ad set using an existing creative."""
     return MetaClient.from_env().create_ad(adset_id, name, creative_id)
+
+
+def get_custom_audiences() -> list[dict[str, Any]]:
+    """List existing custom/lookalike audiences for the configured account."""
+    return MetaClient.from_env().get_custom_audiences()
+
+
+def create_lookalike_audience(
+    source_audience_id: str, name: str, country: str = "TR", ratio: float = 0.01
+) -> dict[str, Any]:
+    """Create a lookalike audience from an existing source audience."""
+    return MetaClient.from_env().create_lookalike_audience(
+        source_audience_id, name, country, ratio
+    )
 
 
 def get_ad_set(adset_id: str) -> dict[str, Any]:

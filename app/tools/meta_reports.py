@@ -15,6 +15,7 @@ from app.meta.client import (
     MetaAPIError,
     get_account_insights,
     get_account_insights_breakdown,
+    get_custom_audiences,
     get_performance_report,
     test_meta_connection,
 )
@@ -362,6 +363,36 @@ def analyze_ad_creative(ad_name: str, date_preset: str = "last_7d") -> str:
     except Exception as error:  # noqa: BLE001
         return f"Görsel analizi yapılamadı: {error}"
     return f"Reklam: {match['name']}\n\n{critique}"
+
+
+@function_tool
+def list_custom_audiences() -> str:
+    """Hesaptaki mevcut özel/benzer (lookalike) kitleleri listeler.
+
+    Lookalike oluşturmak için kaynak kitle seçmek üzere kullan; kullanıcıya
+    hangi kitleyi baz alacağını sorabilirsin.
+    """
+    try:
+        audiences = get_custom_audiences()
+    except MetaAPIError as error:
+        return f"Kitleler alınamadı: {error}"
+    if not audiences:
+        return "Hesapta tanımlı özel kitle bulunamadı."
+    rows = [
+        (
+            str(a.get("id", "-")),
+            str(a.get("name", "-")),
+            str(a.get("subtype", "-")),
+            str(a.get("approximate_count_lower_bound", "-")),
+        )
+        for a in audiences
+    ]
+    return _table(
+        "Mevcut özel kitleler",
+        ("ID", "Ad", "Tür", "~Boyut"),
+        (20, 34, 14, 12),
+        rows,
+    )
 
 
 @function_tool
