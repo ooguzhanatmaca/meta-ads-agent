@@ -19,9 +19,19 @@ from app.dashboard_data import (
     rows_to_dataframe,
 )
 from app.meta.client import MetaAPIError
+from app.meta.trends import daily_series_for_range
 
 
 CACHE_SCHEMA_VERSION = 3
+
+TREND_METRICS = [
+    ("roas", "ROAS"),
+    ("cpa", "CPA"),
+    ("spend", "Harcama"),
+    ("purchases", "Satın alma"),
+    ("ctr", "CTR"),
+    ("cpc", "CPC"),
+]
 
 
 st.set_page_config(
@@ -280,6 +290,35 @@ def render_creatives(creatives, daily_ads) -> None:
                 st.caption(creative["creative_reason"])
 
 
+@st.cache_data(ttl=900, show_spinner=False)
+def cached_daily_series(since: str, until: str, schema: int):
+    return daily_series_for_range(since, until)
+
+
+def render_trends(start_date: date, end_date: date) -> None:
+    st.subheader("Günlük Trend")
+    try:
+        series = cached_daily_series(str(start_date), str(end_date), CACHE_SCHEMA_VERSION)
+    except (MetaAPIError, ValueError) as error:
+        st.error(f"Trend verisi yüklenemedi: {error}")
+        return
+    if len(series) < 2:
+        st.info("Trend için en az 2 günlük veri gerekir. Daha geniş bir dönem seç.")
+        return
+
+    frame = pd.DataFrame(series)
+    frame["date"] = pd.to_datetime(frame["date"])
+    columns = st.columns(2)
+    for index, (key, label) in enumerate(TREND_METRICS):
+        if key not in frame:
+            continue
+        figure = px.line(frame, x="date", y=key, markers=True, title=label)
+        figure.update_layout(margin=dict(l=10, r=10, t=40, b=10), height=280)
+        figure.update_xaxes(title=None)
+        figure.update_yaxes(title=None)
+        columns[index % 2].plotly_chart(figure, width="stretch")
+
+
 def main() -> None:
     st.title("Meta Ads Yönetim Paneli")
     st.caption("Salt okunur analiz paneli. Meta üzerinde değişiklik yapmaz.")
@@ -329,9 +368,18 @@ def main() -> None:
     else:
         st.success("Kritik veya yüksek öncelikli aksiyon bulunmadı.")
 
-    overview, creatives_tab, campaigns_tab, adsets_tab, ads_tab, actions_tab = st.tabs(
+    (
+        overview,
+        trend_tab,
+        creatives_tab,
+        campaigns_tab,
+        adsets_tab,
+        ads_tab,
+        actions_tab,
+    ) = st.tabs(
         (
             "Genel Bakış",
+            "Trend",
             "Kreatifler",
             "Kampanyalar",
             "Reklam Setleri",
@@ -356,6 +404,8 @@ def main() -> None:
     ]
     with overview:
         render_charts(data)
+    with trend_tab:
+        render_trends(start_date, end_date)
     with creatives_tab:
         render_creatives(
             data.get("creatives", []),

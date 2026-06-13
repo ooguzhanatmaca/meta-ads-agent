@@ -23,6 +23,7 @@ from app.meta.creative_vision import critique_image
 from app.meta.executive_summary import build_executive_summary
 from app.meta.performance_report import calculate_report_rows, format_report
 from app.meta.recommendations import format_recommendations
+from app.meta.trends import build_trend_report
 from app.rules.budget_rules import budget_suggestions
 from app.rules.creative_rules import evaluate_creatives
 from app.rules.performance_rules import evaluate_ads
@@ -369,6 +370,23 @@ def get_anomaly_alerts() -> str:
         return build_anomaly_report()
     except MetaAPIError as error:
         return f"Uyarılar oluşturulamadı: {error}"
+
+
+@function_tool
+def get_trend(metric: str = "özet", days: int = 14) -> str:
+    """Bir metriğin günlük geçmiş trendini mini grafik (sparkline) ile döndürür.
+
+    Yavaş bozulmaları/iyileşmeleri yakalar (ör. "ROAS son 2 haftada düşüyor mu").
+
+    Args:
+        metric: "roas", "cpa", "ctr", "cpc", "harcama", "satın alma" veya genel
+            bakış için "özet".
+        days: Geriye dönük gün sayısı (örn. 7, 14, 30).
+    """
+    try:
+        return build_trend_report(metric, days)
+    except MetaAPIError as error:
+        return f"Trend alınamadı: {error}"
 
 
 @function_tool

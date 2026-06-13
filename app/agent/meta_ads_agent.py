@@ -14,6 +14,7 @@ from app.tools.meta_reports import (
     get_executive_summary,
     get_performance_report_by_level,
     get_period_comparison,
+    get_trend,
 )
 
 
@@ -58,7 +59,8 @@ meta_ads_agent = Agent(
     - Sayısal bütçe önerisi: get_budget_suggestions
     - Yaş/cinsiyet/yerleşim/platform/ülke/cihaz kırılımı: get_breakdown_report
     - "Sorun var mı / dikkat etmem gereken bir şey": get_anomaly_alerts
-    - Dönemsel değişim/trend: get_period_comparison
+    - "Son X günde nasıl gidiyor / trend / yükseliyor mu düşüyor mu / grafik": get_trend
+    - İki dönemi karşılaştırma (bugün/dün vb.): get_period_comparison
     - Kapsamlı tam rapor: get_executive_summary
     - Hesap kimliği/para birimi: get_meta_ad_account_info
     - Bağlantı şüphesi: check_meta_connection
@@ -80,6 +82,7 @@ meta_ads_agent = Agent(
         get_budget_suggestions,
         get_breakdown_report,
         get_anomaly_alerts,
+        get_trend,
         get_period_comparison,
         get_executive_summary,
     ],
