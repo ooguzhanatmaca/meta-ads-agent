@@ -11,12 +11,17 @@ API keys are read from provider-specific environment variables, e.g.
 ``GEMINI_API_KEY`` for Gemini or ``ANTHROPIC_API_KEY`` for Claude.
 """
 
+import asyncio
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 
 import openai
 from agents import RunConfig, Runner
+
+
+MAX_RETRY_WAIT_SECONDS = 20.0
 
 
 # gemini-2.0-flash ücretsiz katmanda çok daha yüksek günlük limite sahip.
@@ -64,6 +69,35 @@ def _is_rate_limit(exc: Exception) -> bool:
     return "429" in text or "insufficient_quota" in text or "quota" in text
 
 
+def _is_provider_glitch(exc: Exception) -> bool:
+    """Provider-side flakiness (ör. modelin bozuk araç çağrısı) — bu modeli atla."""
+    text = str(exc).lower()
+    return (
+        "tool call validation" in text
+        or "tool_use_failed" in text
+        or "failed to call a function" in text
+        or "did not match schema" in text
+    )
+
+
+def _retry_wait_seconds(exc: Exception) -> float | None:
+    """Seconds to wait before retrying the SAME model, or None to skip retrying.
+
+    Only short per-minute/token-per-minute limits are worth waiting out; daily
+    limits return None (move to the next model immediately).
+    """
+    text = str(exc)
+    if "PerDay" in text or "per day" in text.lower():
+        return None
+    match = re.search(r"try again in\s*(\d+(?:\.\d+)?)\s*s", text, re.IGNORECASE)
+    if match is None:
+        match = re.search(r"retrydelay\W*(\d+(?:\.\d+)?)\s*s", text, re.IGNORECASE)
+    if match:
+        seconds = float(match.group(1))
+        return seconds if seconds <= MAX_RETRY_WAIT_SECONDS else None
+    return None
+
+
 def _model_chain() -> list[str]:
     """Ordered, de-duplicated list of models to try (primary first)."""
     primary = os.getenv("PRIMARY_MODEL", DEFAULT_PRIMARY_MODEL).strip()
@@ -109,17 +143,29 @@ async def run_with_fallback(agent: Any, user_input: Any, **kwargs: Any) -> Agent
     """Run ``agent`` through the model chain until one succeeds."""
     chain = _model_chain()
     for model_name in chain:
-        try:
-            result = await _run_on(agent, user_input, model_name, **kwargs)
-            return AgentRun(
-                result=result, provider=_provider_of(model_name), model=model_name
-            )
-        except MissingApiKeyError:
-            continue  # anahtar yoksa bu modeli atla
-        except Exception as exc:  # noqa: BLE001
-            if _is_rate_limit(exc):
-                continue  # kota/limit dolu → sıradaki modeli dene
-            raise
+        retried = False
+        while True:
+            try:
+                result = await _run_on(agent, user_input, model_name, **kwargs)
+                return AgentRun(
+                    result=result,
+                    provider=_provider_of(model_name),
+                    model=model_name,
+                )
+            except MissingApiKeyError:
+                break  # anahtar yoksa bu modeli atla
+            except Exception as exc:  # noqa: BLE001
+                if _is_rate_limit(exc):
+                    # Kısa dakikalık/token limitiyse bir kez bekleyip aynı modeli dene.
+                    wait = _retry_wait_seconds(exc) if not retried else None
+                    if wait is not None:
+                        retried = True
+                        await asyncio.sleep(wait + 1)
+                        continue
+                    break  # günlük/uzun limit → sıradaki modele geç
+                if _is_provider_glitch(exc):
+                    break  # modelin geçici hatası → sıradaki modele geç
+                raise  # gerçek hata → yükselt
 
     raise RuntimeError(
         "Tüm modeller şu an kota/limit dolu veya yapılandırılmamış. "

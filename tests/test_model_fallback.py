@@ -98,3 +98,45 @@ def test_non_rate_limit_error_is_raised(monkeypatch: pytest.MonkeyPatch) -> None
     with patch.object(mf.Runner, "run", side_effect=fake_run):
         with pytest.raises(ValueError, match="beklenmeyen hata"):
             asyncio.run(mf.run_with_fallback("AGENT", "merhaba"))
+
+
+def test_retry_wait_parses_groq_tpm() -> None:
+    exc = Exception(
+        "GroqException - on tokens per minute (TPM): Limit 12000. "
+        "Please try again in 7.815s."
+    )
+    assert mf._retry_wait_seconds(exc) == 7.815
+
+
+def test_retry_wait_skips_daily_limit() -> None:
+    exc = Exception("GenerateRequestsPerDayPerProjectPerModel ... retryDelay: 18s")
+    assert mf._retry_wait_seconds(exc) is None
+
+
+def test_retry_wait_caps_long_delays() -> None:
+    assert mf._retry_wait_seconds(Exception("try again in 120s")) is None
+
+
+def test_provider_glitch_detected() -> None:
+    assert mf._is_provider_glitch(Exception("tool call validation failed: ..."))
+    assert not mf._is_provider_glitch(Exception("some unrelated error"))
+
+
+def test_provider_glitch_falls_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PRIMARY_MODEL", "groq/llama-3.3-70b-versatile")
+    monkeypatch.setenv("FALLBACK_MODEL", "openai")
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    mf._model_cache.clear()
+
+    ok = MagicMock(final_output="OpenAI yanıtı")
+
+    async def fake_run(agent, user_input, **kwargs):
+        if "run_config" in kwargs:  # groq → bozuk araç çağrısı
+            raise Exception("GroqException - tool call validation failed")
+        return ok
+
+    with patch.object(mf.Runner, "run", side_effect=fake_run):
+        run = asyncio.run(mf.run_with_fallback("AGENT", "merhaba"))
+
+    assert run.provider == "openai"
+    assert run.result is ok
