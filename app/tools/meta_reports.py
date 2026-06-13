@@ -22,6 +22,7 @@ from app.meta.compare_periods import build_period_comparison
 from app.meta.creative_vision import critique_image
 from app.meta.diagnosis import build_diagnosis
 from app.meta.executive_summary import build_executive_summary
+from app.meta.opportunities import build_opportunities
 from app.meta.export_excel import export_excel
 from app.meta.simulation import build_simulation
 from app.meta.weekly_digest import build_weekly_digest
@@ -361,6 +362,21 @@ def analyze_ad_creative(ad_name: str, date_preset: str = "last_7d") -> str:
     except Exception as error:  # noqa: BLE001
         return f"Görsel analizi yapılamadı: {error}"
     return f"Reklam: {match['name']}\n\n{critique}"
+
+
+@function_tool
+def find_opportunities() -> str:
+    """Veri odaklı büyüme fırsatları üretir (agent'ın stratejik fikirleri).
+
+    Yetersiz hedeflenen kazanan segmentler, verimli yerleşimler, bütçe yeniden
+    dağıtımı, ölçeklemeye uygun setler ve denenmemiş kitle fikirlerini bulur.
+    "Ne yapabilirim / nasıl büyütürüm / yeni ne deneyeyim / fikir/öneri ver"
+    sorularında kullan. Klonlamanın ötesinde yeni stratejiler önerir.
+    """
+    try:
+        return build_opportunities()
+    except MetaAPIError as error:
+        return f"Fırsat analizi yapılamadı: {error}"
 
 
 @function_tool
