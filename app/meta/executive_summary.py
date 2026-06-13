@@ -91,60 +91,65 @@ def build_comparison(
     return format_comparison(period, compare_metrics(current, previous))
 
 
+def build_executive_summary() -> str:
+    """Fetch data and assemble the full executive summary as a single string."""
+    today_period, _, seven_day_period = build_default_periods()
+
+    today_insight = get_account_insights_for_period(
+        str(today_period.current_since), str(today_period.current_until)
+    )
+    yesterday_insight = get_account_insights_for_period(
+        str(today_period.previous_since), str(today_period.previous_until)
+    )
+    seven_day_insight = get_account_insights_for_period(
+        str(seven_day_period.current_since), str(seven_day_period.current_until)
+    )
+    previous_seven_day_insight = get_account_insights_for_period(
+        str(seven_day_period.previous_since), str(seven_day_period.previous_until)
+    )
+    ad_entities = get_performance_report("ad", "last_7d")
+
+    today_metrics = calculate_period_metrics(today_insight)
+    yesterday_metrics = calculate_period_metrics(yesterday_insight)
+    seven_day_metrics = calculate_period_metrics(seven_day_insight)
+    previous_seven_day_metrics = calculate_period_metrics(
+        previous_seven_day_insight
+    )
+    ads = calculate_report_rows(ad_entities)
+    recommendations = evaluate_ads(ads)
+
+    sections = (
+        "META ADS YÖNETİCİ ÖZETİ",
+        format_today_summary(today_metrics),
+        "2. " + build_comparison(today_period, today_metrics, yesterday_metrics),
+        "3. "
+        + build_comparison(
+            seven_day_period, seven_day_metrics, previous_seven_day_metrics
+        ),
+        format_ad_list("4. En iyi 5 reklam", select_best_ads(ads)),
+        format_ad_list("5. En kötü 5 reklam", select_worst_ads(ads)),
+        format_action_section(
+            "6. Kapatılmaya aday reklamlar",
+            filter_recommendations(recommendations, "Kapatılmaya aday"),
+        ),
+        format_action_section(
+            "7. Bütçe artırılmaya aday reklamlar",
+            filter_recommendations(recommendations, "Bütçeyi kontrollü artır"),
+        ),
+        format_action_section(
+            "8. Kreatif yorgunluğu olan reklamlar",
+            filter_recommendations(recommendations, "Kreatif değiştir"),
+        ),
+        format_action_section(
+            "9. Öncelik sırasına göre aksiyon listesi", recommendations
+        ),
+    )
+    return "\n\n".join(sections)
+
+
 def main() -> int:
     try:
-        today_period, _, seven_day_period = build_default_periods()
-
-        today_insight = get_account_insights_for_period(
-            str(today_period.current_since), str(today_period.current_until)
-        )
-        yesterday_insight = get_account_insights_for_period(
-            str(today_period.previous_since), str(today_period.previous_until)
-        )
-        seven_day_insight = get_account_insights_for_period(
-            str(seven_day_period.current_since), str(seven_day_period.current_until)
-        )
-        previous_seven_day_insight = get_account_insights_for_period(
-            str(seven_day_period.previous_since), str(seven_day_period.previous_until)
-        )
-        ad_entities = get_performance_report("ad", "last_7d")
-
-        today_metrics = calculate_period_metrics(today_insight)
-        yesterday_metrics = calculate_period_metrics(yesterday_insight)
-        seven_day_metrics = calculate_period_metrics(seven_day_insight)
-        previous_seven_day_metrics = calculate_period_metrics(
-            previous_seven_day_insight
-        )
-        ads = calculate_report_rows(ad_entities)
-        recommendations = evaluate_ads(ads)
-
-        sections = (
-            "META ADS YÖNETİCİ ÖZETİ",
-            format_today_summary(today_metrics),
-            "2. " + build_comparison(today_period, today_metrics, yesterday_metrics),
-            "3. "
-            + build_comparison(
-                seven_day_period, seven_day_metrics, previous_seven_day_metrics
-            ),
-            format_ad_list("4. En iyi 5 reklam", select_best_ads(ads)),
-            format_ad_list("5. En kötü 5 reklam", select_worst_ads(ads)),
-            format_action_section(
-                "6. Kapatılmaya aday reklamlar",
-                filter_recommendations(recommendations, "Kapatılmaya aday"),
-            ),
-            format_action_section(
-                "7. Bütçe artırılmaya aday reklamlar",
-                filter_recommendations(recommendations, "Bütçeyi kontrollü artır"),
-            ),
-            format_action_section(
-                "8. Kreatif yorgunluğu olan reklamlar",
-                filter_recommendations(recommendations, "Kreatif değiştir"),
-            ),
-            format_action_section(
-                "9. Öncelik sırasına göre aksiyon listesi", recommendations
-            ),
-        )
-        print("\n\n".join(sections))
+        print(build_executive_summary())
     except MetaAPIError as error:
         print(f"Yönetici özeti oluşturulamadı: {error}")
         return 1

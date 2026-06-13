@@ -162,22 +162,27 @@ def format_comparison(
     return "\n".join((period.title, ranges, header, separator, *lines))
 
 
+def build_period_comparison() -> str:
+    """Fetch data and assemble the default period comparisons as a single string."""
+    outputs = []
+    for period in build_default_periods():
+        current = get_account_insights_for_period(
+            str(period.current_since), str(period.current_until)
+        )
+        previous = get_account_insights_for_period(
+            str(period.previous_since), str(period.previous_until)
+        )
+        comparisons = compare_metrics(
+            calculate_period_metrics(current),
+            calculate_period_metrics(previous),
+        )
+        outputs.append(format_comparison(period, comparisons))
+    return "\n\n".join(outputs)
+
+
 def main() -> int:
     try:
-        outputs = []
-        for period in build_default_periods():
-            current = get_account_insights_for_period(
-                str(period.current_since), str(period.current_until)
-            )
-            previous = get_account_insights_for_period(
-                str(period.previous_since), str(period.previous_until)
-            )
-            comparisons = compare_metrics(
-                calculate_period_metrics(current),
-                calculate_period_metrics(previous),
-            )
-            outputs.append(format_comparison(period, comparisons))
-        print("\n\n".join(outputs))
+        print(build_period_comparison())
     except MetaAPIError as error:
         print(f"Dönem karşılaştırması alınamadı: {error}")
         return 1

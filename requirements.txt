@@ -19,6 +19,7 @@ idna==3.18
 jiter==0.15.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
+litellm==1.88.1
 mcp==1.27.2
 openai==2.41.1
 openai-agents==0.17.4

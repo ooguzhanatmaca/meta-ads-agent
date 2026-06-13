@@ -1,9 +1,9 @@
 import asyncio
 
-from agents import Runner
 from dotenv import load_dotenv
 
 from app.agent.meta_ads_agent import meta_ads_agent
+from app.agent.model_fallback import run_with_fallback
 
 
 load_dotenv()
@@ -24,12 +24,12 @@ async def main() -> None:
             continue
 
         try:
-            result = await Runner.run(
-                meta_ads_agent,
-                user_message,
-            )
+            run = await run_with_fallback(meta_ads_agent, user_message)
 
-            print(f"\nMeta Ads Agent:\n{result.final_output}\n")
+            if run.provider != "openai":
+                print(f"(OpenAI kotası dolu — {run.provider} ile yanıtlanıyor.)")
+
+            print(f"\nMeta Ads Agent:\n{run.result.final_output}\n")
 
         except Exception as error:
             print(f"\nHata oluştu: {error}\n")
@@ -37,4 +37,3 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-    
