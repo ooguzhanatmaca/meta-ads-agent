@@ -19,6 +19,7 @@ from email.message import EmailMessage
 
 from dotenv import load_dotenv
 
+from app.meta.anomaly_report import collect_alerts, format_alerts
 from app.meta.client import MetaAPIError
 from app.meta.executive_summary import build_executive_summary
 
@@ -27,16 +28,17 @@ DEFAULT_SMTP_HOST = "smtp.gmail.com"
 DEFAULT_SMTP_PORT = 587
 
 
-def build_email(report: str, today: str) -> EmailMessage:
+def build_email(body: str, subject: str) -> EmailMessage:
     """Compose the report e-mail (plain text + monospace HTML)."""
     sender = os.environ["SMTP_USER"]
     recipient = os.getenv("REPORT_TO") or sender
 
     message = EmailMessage()
-    message["Subject"] = f"Meta Ads Günlük Rapor - {today}"
+    message["Subject"] = subject
     message["From"] = sender
     message["To"] = recipient
-    message.set_content(report)
+    message.set_content(body)
+    report = body
     # Sabit genişlikli tablolar e-postada düzgün görünsün diye <pre>.
     escaped = report.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     message.add_alternative(
@@ -66,14 +68,22 @@ def main() -> int:
         return 1
 
     try:
-        report = build_executive_summary()
+        alerts = collect_alerts()
+        summary = build_executive_summary()
     except MetaAPIError as error:
         print(f"Rapor oluşturulamadı: {error}")
         return 1
 
     today = date.today().isoformat()
+    # E-posta uyarılarla başlar, ardından tam yönetici özeti gelir.
+    body = f"{format_alerts(alerts)}\n\n{'=' * 60}\n\n{summary}"
+    if alerts:
+        subject = f"⚠️ Meta Ads: {len(alerts)} uyarı - {today}"
+    else:
+        subject = f"✅ Meta Ads Günlük Rapor (sorun yok) - {today}"
+
     try:
-        send_email(build_email(report, today))
+        send_email(build_email(body, subject))
     except (smtplib.SMTPException, OSError) as error:
         print(f"E-posta gönderilemedi: {error}")
         return 1

@@ -10,6 +10,7 @@ from typing import Any
 from agents import function_tool
 
 from app.meta.account_summary import calculate_summary, format_summary
+from app.meta.anomaly_report import build_anomaly_report
 from app.meta.client import (
     MetaAPIError,
     get_account_insights,
@@ -274,6 +275,19 @@ def get_breakdown_report(dimension: str, date_preset: str = "last_7d") -> str:
         (26, 11, 11, 10, 9, 11, 9, 9),
         rows,
     )
+
+
+@function_tool
+def get_anomaly_alerts() -> str:
+    """Hesapta dikkat gerektiren anomalileri (uyarıları) tespit eder.
+
+    CPA artışı, ROAS düşüşü, harcama temposu, satışsız harcama ve kreatif
+    yorgunluğu gibi sorunları kontrol eder; sorun yoksa bunu açıkça belirtir.
+    """
+    try:
+        return build_anomaly_report()
+    except MetaAPIError as error:
+        return f"Uyarılar oluşturulamadı: {error}"
 
 
 @function_tool

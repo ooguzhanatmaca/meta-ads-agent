@@ -5,6 +5,7 @@ from app.tools.meta_reports import (
     check_meta_connection,
     get_account_summary,
     get_ad_recommendations,
+    get_anomaly_alerts,
     get_breakdown_report,
     get_budget_suggestions,
     get_creative_analysis,
@@ -40,6 +41,8 @@ meta_ads_agent = Agent(
     - Bütçe artırma/azaltma ve sayısal bütçe önerisi sorularında: get_budget_suggestions.
     - Yaş, cinsiyet, yerleşim, platform, ülke, cihaz kırılımı sorularında:
       get_breakdown_report (dimension parametresiyle).
+    - "Bir sorun var mı / her şey yolunda mı / dikkat etmem gereken bir şey"
+      gibi sorularda: get_anomaly_alerts.
     - Dönemsel değişim / trend sorularında: get_period_comparison.
     - Kapsamlı genel bakış veya tam rapor istendiğinde: get_executive_summary.
     - Hesap kimliği/para birimi gibi temel bilgiler için: get_meta_ad_account_info.
@@ -67,6 +70,7 @@ meta_ads_agent = Agent(
         get_creative_analysis,
         get_budget_suggestions,
         get_breakdown_report,
+        get_anomaly_alerts,
         get_period_comparison,
         get_executive_summary,
     ],
