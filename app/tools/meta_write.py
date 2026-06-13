@@ -15,6 +15,7 @@ from agents import function_tool
 
 from app.meta.client import (
     MetaAPIError,
+    clone_ad_set,
     create_ad,
     create_ad_set,
     create_campaign,
@@ -106,6 +107,28 @@ def _create_ad_set(
     return (
         f"Reklam seti DURAKLATILMIŞ olarak oluşturuldu (id: {result.get('id')}). "
         f"Günlük bütçe {daily_budget_try:.2f} TL, hedef ülke {country}, yaş {age_min}-{age_max}."
+    )
+
+
+def _clone_ad_set(
+    source_adset_id: str,
+    new_name: str,
+    budget_multiplier: float = 1.0,
+    new_campaign_id: str = "",
+) -> str:
+    if not _writes_enabled():
+        return DISABLED_MESSAGE
+    try:
+        result = clone_ad_set(
+            source_adset_id, new_name, budget_multiplier, new_campaign_id or None
+        )
+    except MetaAPIError as error:
+        return f"Reklam seti klonlanamadı: {error}"
+    note = f" (bütçe x{budget_multiplier:g})" if budget_multiplier != 1.0 else ""
+    return (
+        f"Kazanan setin ayarları (hedefleme, bütçe, optimizasyon) kopyalanarak "
+        f"yeni reklam seti DURAKLATILMIŞ oluşturuldu (id: {result.get('id')}){note}. "
+        "Ads Manager'dan kontrol edip yayına alabilirsiniz."
     )
 
 
@@ -201,6 +224,30 @@ def create_ad_set_tool(
         campaign_id, name, daily_budget_try, optimization_goal, country,
         age_min, age_max, pixel_id, custom_event_type,
     )
+
+
+@function_tool
+def clone_ad_set_tool(
+    source_adset_id: str,
+    new_name: str,
+    budget_multiplier: float = 1.0,
+    new_campaign_id: str = "",
+) -> str:
+    """Kazanan bir reklam setini baz alıp ayarlarını kopyalayarak yeni set oluşturur.
+
+    Kaynak setin GERÇEK hedeflemesini (ilgi alanları, kitleler, yerleşimler),
+    bütçesini, optimizasyon hedefini ve teklif stratejisini kopyalar; yeni set
+    DURAKLATILMIŞ oluşturulur. Önce reklam seti raporundan en iyi (en yüksek ROAS)
+    setin id'sini belirle, sonra bunu çağır. Yalnızca kullanıcının açık onayıyla.
+
+    Args:
+        source_adset_id: Baz alınacak (kazanan) reklam setinin ID'si.
+        new_name: Yeni setin adı.
+        budget_multiplier: Bütçe çarpanı (ör. ölçeklemek için 1.5 = %50 fazla).
+        new_campaign_id: Yeni set farklı bir kampanyaya bağlanacaksa ID (opsiyonel;
+            boşsa kaynak setin kampanyası kullanılır).
+    """
+    return _clone_ad_set(source_adset_id, new_name, budget_multiplier, new_campaign_id)
 
 
 @function_tool

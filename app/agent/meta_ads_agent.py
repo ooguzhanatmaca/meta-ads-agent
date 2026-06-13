@@ -3,6 +3,7 @@ from agents import Agent
 from app.tools.meta_account import get_meta_ad_account_info
 from app.tools.meta_write import (
     activate_entity,
+    clone_ad_set_tool,
     create_ad_set_tool,
     create_ad_tool,
     create_paused_campaign,
@@ -74,6 +75,11 @@ meta_ads_agent = Agent(
       (kampanya id'siyle) → create_ad_tool (reklam seti id'si + mevcut creative_id).
       Her adımda dönen id'yi bir sonrakinde kullan. Reklam için mevcut bir
       creative_id gerekir (reklam raporundan alınabilir).
+    - VERİ ODAKLI OLUŞTURMA (tercih edilen): Kullanıcı "en iyiye göre/kazanana göre
+      yeni set kur", "başarılıyı çoğalt/ölçekle" derse: önce get_performance_report_by_level
+      ("adset") ile en yüksek ROAS'lı seti belirle, sonra clone_ad_set_tool ile onun
+      gerçek hedefleme/bütçe/optimizasyon ayarlarını kopyala. Sıfırdan basit
+      hedefleme yerine bunu öner.
     - activate_entity ve update_daily_budget doğrudan HARCAMAYI etkiler; bunlarda
       ekstra dikkatli ol, yalnızca kullanıcı çok net isterse çağır.
     - Bir araç "yazma işlemleri kapalı" derse, kullanıcıya .env'de
@@ -126,6 +132,7 @@ meta_ads_agent = Agent(
         get_executive_summary,
         create_paused_campaign,
         create_ad_set_tool,
+        clone_ad_set_tool,
         create_ad_tool,
         pause_entity,
         activate_entity,

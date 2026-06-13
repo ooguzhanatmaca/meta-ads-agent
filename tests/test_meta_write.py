@@ -137,3 +137,29 @@ def test_ad_blocked_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
         out = mw._create_ad("1", "Reklam", "c1")
     assert create.called is False
     assert "KAPALI" in out
+
+
+def test_clone_ad_set_passes_params_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    calls = {}
+
+    def fake_clone(source_id, new_name, multiplier, campaign_id):
+        calls.update(source_id=source_id, new_name=new_name, multiplier=multiplier,
+                     campaign_id=campaign_id)
+        return {"id": "99001"}
+
+    with patch.object(mw, "clone_ad_set", side_effect=fake_clone):
+        out = mw._clone_ad_set("23800", "Kazanan Kopya", 1.5)
+
+    assert calls["source_id"] == "23800"
+    assert calls["multiplier"] == 1.5
+    assert calls["campaign_id"] is None  # boş string -> None
+    assert "kopyalanarak" in out and "99001" in out
+
+
+def test_clone_blocked_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "false")
+    with patch.object(mw, "clone_ad_set") as clone:
+        out = mw._clone_ad_set("1", "Kopya")
+    assert clone.called is False
+    assert "KAPALI" in out

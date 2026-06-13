@@ -416,6 +416,52 @@ class MetaClient:
             )
         return self._post(url, data)
 
+    AD_SET_CONFIG_FIELDS = (
+        "name,campaign_id,daily_budget,lifetime_budget,billing_event,"
+        "optimization_goal,bid_strategy,bid_amount,targeting,promoted_object"
+    )
+
+    def get_ad_set(self, adset_id: str) -> dict[str, Any]:
+        """Read an ad set's full configuration (targeting, budget, optimization...)."""
+        url = f"https://graph.facebook.com/{self.graph_api_version}/{adset_id}"
+        return self._get(url, {"fields": self.AD_SET_CONFIG_FIELDS})
+
+    def clone_ad_set(
+        self,
+        source_adset_id: str,
+        new_name: str,
+        budget_multiplier: float = 1.0,
+        new_campaign_id: str | None = None,
+        status: str = "PAUSED",
+    ) -> dict[str, Any]:
+        """Create a PAUSED ad set replicating a source ad set's real settings."""
+        source = self.get_ad_set(source_adset_id)
+        url = (
+            f"https://graph.facebook.com/{self.graph_api_version}/"
+            f"{self.ad_account_id}/adsets"
+        )
+        data: dict[str, Any] = {
+            "name": new_name,
+            "campaign_id": new_campaign_id or source.get("campaign_id"),
+            "status": status,
+            "billing_event": source.get("billing_event", "IMPRESSIONS"),
+            "optimization_goal": source.get("optimization_goal", "LINK_CLICKS"),
+        }
+        if source.get("targeting"):
+            data["targeting"] = json.dumps(source["targeting"])
+        if source.get("promoted_object"):
+            data["promoted_object"] = json.dumps(source["promoted_object"])
+        if source.get("bid_strategy"):
+            data["bid_strategy"] = source["bid_strategy"]
+        if source.get("bid_amount"):
+            data["bid_amount"] = source["bid_amount"]
+        # Bütçeyi (çarpanla) kopyala — kaynak hangi tipi kullanıyorsa o.
+        for budget_key in ("daily_budget", "lifetime_budget"):
+            if source.get(budget_key):
+                data[budget_key] = int(round(int(source[budget_key]) * budget_multiplier))
+                break
+        return self._post(url, data)
+
     def create_ad(
         self, adset_id: str, name: str, creative_id: str, status: str = "PAUSED"
     ) -> dict[str, Any]:
@@ -559,6 +605,23 @@ def create_ad_set(
 def create_ad(adset_id: str, name: str, creative_id: str) -> dict[str, Any]:
     """Create a PAUSED ad in an ad set using an existing creative."""
     return MetaClient.from_env().create_ad(adset_id, name, creative_id)
+
+
+def get_ad_set(adset_id: str) -> dict[str, Any]:
+    """Read an ad set's full configuration."""
+    return MetaClient.from_env().get_ad_set(adset_id)
+
+
+def clone_ad_set(
+    source_adset_id: str,
+    new_name: str,
+    budget_multiplier: float = 1.0,
+    new_campaign_id: str | None = None,
+) -> dict[str, Any]:
+    """Create a PAUSED ad set replicating a source ad set's settings."""
+    return MetaClient.from_env().clone_ad_set(
+        source_adset_id, new_name, budget_multiplier, new_campaign_id
+    )
 
 
 def set_entity_status(entity_id: str, status: str) -> dict[str, Any]:
