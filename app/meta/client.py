@@ -161,6 +161,46 @@ class MetaClient:
         )
         return self._get_performance_report(level, f"time_range({time_range})")
 
+    def get_ad_daily_insights_for_period(
+        self, since: str, until: str
+    ) -> list[dict[str, Any]]:
+        """Return daily ad insights for trend charts without write operations."""
+        url = (
+            f"https://graph.facebook.com/{self.graph_api_version}/"
+            f"{self.ad_account_id}/insights"
+        )
+        params = {
+            "fields": (
+                "ad_id,ad_name,date_start,date_stop,"
+                + ",".join(ACCOUNT_INSIGHT_FIELDS)
+            ),
+            "level": "ad",
+            "time_increment": "1",
+            "time_range": json.dumps(
+                {"since": since, "until": until},
+                separators=(",", ":"),
+            ),
+            "limit": "500",
+        }
+        rows: list[dict[str, Any]] = []
+        while True:
+            payload = self._get(url, params)
+            data = payload.get("data")
+            if not isinstance(data, list) or not all(
+                isinstance(item, dict) for item in data
+            ):
+                raise MetaResponseError(
+                    "Meta API günlük reklam verisi beklenen biçimde değil."
+                )
+            rows.extend(data)
+            paging = payload.get("paging")
+            cursors = paging.get("cursors") if isinstance(paging, dict) else None
+            after = cursors.get("after") if isinstance(cursors, dict) else None
+            if not after or not paging.get("next"):
+                break
+            params = {**params, "after": str(after)}
+        return rows
+
     def _get_performance_report(
         self, level: str, insight_period: str
     ) -> list[dict[str, Any]]:
@@ -283,3 +323,9 @@ def get_performance_report_for_period(
     return MetaClient.from_env().get_performance_report_for_period(
         level, since, until
     )
+
+
+def get_ad_daily_insights_for_period(
+    since: str, until: str
+) -> list[dict[str, Any]]:
+    return MetaClient.from_env().get_ad_daily_insights_for_period(since, until)

@@ -43,6 +43,10 @@ def test_load_dashboard_data_reuses_existing_report_functions(monkeypatch) -> No
         "app.dashboard_data.get_performance_report_for_period",
         mock_report,
     )
+    monkeypatch.setattr(
+        "app.dashboard_data.get_ad_daily_insights_for_period",
+        lambda since, until: [],
+    )
 
     data = load_dashboard_data(date(2026, 6, 5), date(2026, 6, 11))
 
@@ -58,6 +62,7 @@ def test_load_dashboard_data_reuses_existing_report_functions(monkeypatch) -> No
     assert data["current"]["frequency"] == 2
     assert data["recommendations"] == []
     assert data["creatives"] == []
+    assert data["daily_ads"] == []
 
 
 def test_load_dashboard_data_rejects_invalid_range() -> None:

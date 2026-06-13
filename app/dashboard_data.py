@@ -7,12 +7,14 @@ from typing import Any
 import pandas as pd
 
 from app.meta.client import (
+    get_ad_daily_insights_for_period,
     get_account_insights_for_period,
     get_performance_report_for_period,
 )
 from app.meta.compare_periods import calculate_period_metrics, compare_metrics
 from app.meta.export_excel import build_workbook
 from app.meta.performance_report import calculate_report_rows
+from app.meta.account_summary import calculate_summary
 from app.rules.performance_rules import evaluate_ads
 from app.rules.creative_rules import evaluate_creatives
 
@@ -71,6 +73,19 @@ def load_dashboard_data(start_date: date, end_date: date) -> dict[str, Any]:
     ads = calculate_report_rows(
         get_performance_report_for_period("ad", since, until)
     )
+    daily_ads = []
+    for insight in get_ad_daily_insights_for_period(since, until):
+        metrics = calculate_summary(insight)
+        reach = metrics["reach"]
+        daily_ads.append(
+            {
+                "id": str(insight.get("ad_id") or "-"),
+                "name": str(insight.get("ad_name") or "-"),
+                "date": str(insight.get("date_start") or ""),
+                **metrics,
+                "frequency": metrics["impressions"] / reach if reach else 0.0,
+            }
+        )
     return {
         "current": current_metrics,
         "previous": previous_metrics,
@@ -78,6 +93,7 @@ def load_dashboard_data(start_date: date, end_date: date) -> dict[str, Any]:
         "campaigns": campaigns,
         "adsets": adsets,
         "ads": ads,
+        "daily_ads": daily_ads,
         "recommendations": evaluate_ads(ads),
         "creatives": evaluate_creatives(ads),
         "start_date": start_date,

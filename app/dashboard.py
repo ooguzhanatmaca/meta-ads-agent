@@ -21,7 +21,7 @@ from app.dashboard_data import (
 from app.meta.client import MetaAPIError
 
 
-CACHE_SCHEMA_VERSION = 2
+CACHE_SCHEMA_VERSION = 3
 
 
 st.set_page_config(
@@ -122,7 +122,73 @@ def render_table(title: str, rows, columns) -> None:
     )
 
 
-def render_creatives(creatives) -> None:
+def render_creative_detail(creative, daily_ads) -> None:
+    st.divider()
+    st.subheader(f"Kreatif Detayı: {creative['name']}")
+    score_columns = st.columns(3)
+    score_columns[0].metric("Sağlık Puanı", f"{creative['health_score']}/100")
+    score_columns[1].metric("Durum", creative["health_status"])
+    score_columns[2].metric("Tür", creative["creative_type"])
+
+    trend_rows = [row for row in daily_ads if row["id"] == creative["id"]]
+    if trend_rows:
+        trend = pd.DataFrame(trend_rows).sort_values("date")
+        left, right = st.columns(2)
+        left.plotly_chart(
+            px.line(
+                trend,
+                x="date",
+                y=["roas", "ctr", "frequency"],
+                markers=True,
+                title="Günlük ROAS, CTR ve Frekans",
+                labels={"date": "Tarih", "value": "Değer", "variable": "Metrik"},
+            ),
+            width="stretch",
+        )
+        right.plotly_chart(
+            px.line(
+                trend,
+                x="date",
+                y=["spend", "cpa"],
+                markers=True,
+                title="Günlük Harcama ve CPA",
+                labels={"date": "Tarih", "value": "TL", "variable": "Metrik"},
+            ),
+            width="stretch",
+        )
+    else:
+        st.info("Bu reklam için günlük trend verisi bulunamadı.")
+
+    if creative["creative_type"] == "Video":
+        funnel = pd.DataFrame(
+            {
+                "Aşama": ["Başlatma", "%25", "%50", "%75", "%95"],
+                "İzlenme": [
+                    creative["video_plays"],
+                    creative["video_p25"],
+                    creative["video_p50"],
+                    creative["video_p75"],
+                    creative["video_p95"],
+                ],
+            }
+        )
+        st.plotly_chart(
+            px.funnel(funnel, x="İzlenme", y="Aşama", title="Video İzlenme Hunisi"),
+            width="stretch",
+        )
+
+    brief = creative["creative_brief"]
+    st.subheader("Yeni Varyasyon Briefi")
+    st.markdown(
+        f"**Hook:** {brief['hook']}\n\n"
+        f"**Açı:** {brief['angle']}\n\n"
+        f"**Format:** {brief['format']}\n\n"
+        f"**Güven unsuru:** {brief['proof']}\n\n"
+        f"**CTA:** {brief['cta']}"
+    )
+
+
+def render_creatives(creatives, daily_ads) -> None:
     st.subheader("Kreatif Performansı")
     st.caption(
         "Görsel ve videolar, seçilen dönemdeki reklam sonuçlarına göre "
@@ -157,6 +223,16 @@ def render_creatives(creatives) -> None:
         and (show_without_spend or float(item.get("spend") or 0) > 0)
     ]
 
+    selectable = {f"{item['name']} ({item['id']})": item for item in visible}
+    selected_name = st.selectbox(
+        "Detaylı analiz edilecek kreatif",
+        options=list(selectable),
+        index=None,
+        placeholder="Bir kreatif seçin",
+    )
+    if selected_name:
+        render_creative_detail(selectable[selected_name], daily_ads)
+
     for start in range(0, len(visible), 3):
         columns = st.columns(3)
         for column, creative in zip(columns, visible[start : start + 3]):
@@ -187,6 +263,13 @@ def render_creatives(creatives) -> None:
                 metrics[1].metric("ROAS", f"{creative['roas']:.2f}")
                 metrics[2].metric("CTR", f"%{creative['ctr']:.2f}")
                 metrics[3].metric("Frekans", f"{creative['frequency']:.2f}")
+                st.progress(
+                    creative["health_score"] / 100,
+                    text=(
+                        f"Kreatif sağlık puanı: {creative['health_score']}/100 "
+                        f"({creative['health_status']})"
+                    ),
+                )
                 if creative["creative_type"] == "Video":
                     st.caption(
                         f"Video başlatma: %{creative['video_hook_rate']:.2f} | "
@@ -274,7 +357,10 @@ def main() -> None:
     with overview:
         render_charts(data)
     with creatives_tab:
-        render_creatives(data.get("creatives", []))
+        render_creatives(
+            data.get("creatives", []),
+            data.get("daily_ads", []),
+        )
     with campaigns_tab:
         render_table("Kampanya Performansı", data["campaigns"], ["id", "name", *common_metrics])
     with adsets_tab:

@@ -1,4 +1,9 @@
-from app.rules.creative_rules import evaluate_creative, evaluate_creatives
+from app.rules.creative_rules import (
+    build_creative_brief,
+    creative_health,
+    evaluate_creative,
+    evaluate_creatives,
+)
 
 
 def test_creative_without_purchases_is_marked_as_not_working() -> None:
@@ -53,3 +58,21 @@ def test_creatives_are_sorted_by_priority_then_spend() -> None:
     )
 
     assert results[0]["name"] == "Critical"
+
+
+def test_creative_health_is_bounded_and_classified() -> None:
+    score, status = creative_health(
+        {"spend": 1000, "purchases": 8, "roas": 5, "ctr": 2.2, "frequency": 2}
+    )
+
+    assert score == 100
+    assert status == "Sağlıklı"
+
+
+def test_video_brief_is_created_without_external_calls() -> None:
+    brief = build_creative_brief(
+        {"creative_type": "Video", "video_hook_rate": 10, "roas": 3, "ctr": 1}
+    )
+
+    assert "İlk karede" in brief["hook"]
+    assert brief["cta"] == "Şimdi incele"

@@ -6,6 +6,62 @@ from typing import Any
 PRIORITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
 
+def creative_health(ad: dict[str, Any]) -> tuple[int, str]:
+    """Calculate a bounded creative health score from stable ad metrics."""
+    spend = float(ad.get("spend") or 0)
+    purchases = float(ad.get("purchases") or 0)
+    roas = float(ad.get("roas") or 0)
+    ctr = float(ad.get("ctr") or 0)
+    frequency = float(ad.get("frequency") or 0)
+    score = 50
+
+    score += 25 if roas >= 4 else 15 if roas >= 2.5 else -20 if spend >= 500 else 0
+    score += 15 if ctr >= 2 else 5 if ctr >= 1 else -10
+    score += 10 if purchases >= 5 else -20 if spend >= 1000 and purchases == 0 else 0
+    score += 5 if frequency < 3.5 else -15
+    score = max(0, min(100, score))
+    status = "Sağlıklı" if score >= 75 else "Riskli" if score >= 45 else "Zayıf"
+    return score, status
+
+
+def build_creative_brief(ad: dict[str, Any]) -> dict[str, str]:
+    """Build a local rule-based variation brief without an AI API call."""
+    creative_type = str(ad.get("creative_type") or "Görsel")
+    label = str(ad.get("creative_label") or "")
+    roas = float(ad.get("roas") or 0)
+    ctr = float(ad.get("ctr") or 0)
+
+    if creative_type == "Video":
+        hook = (
+            "İlk karede sonucu göster ve ilk 3 saniyede net bir vaat kullan."
+            if float(ad.get("video_hook_rate") or 0) < 20
+            else "Mevcut açılışı koru; aynı vaadin daha kısa bir varyasyonunu dene."
+        )
+        format_note = "15-25 saniye, hızlı kurgu, ürün ilk 5 saniyede görünür."
+    else:
+        hook = "Ürünü tek odak yap; faydayı kısa ve yüksek kontrastlı başlıkla göster."
+        format_note = "1:1 ve 4:5 varyasyon; temiz kadraj ve güçlü ürün yakın planı."
+
+    angle = (
+        "Kazanan mesajı koru, yalnızca hook ve görsel dili çeşitlendir."
+        if label == "Bu kreatif tuttu"
+        else "Yeni problem-çözüm açısı ve farklı bir kullanım senaryosu dene."
+    )
+    cta = "Şimdi incele" if roas >= 2.5 else "Detayları gör"
+    proof = (
+        "Müşteri yorumu veya kullanım sonucu ekle."
+        if ctr < 1.5
+        else "Mevcut ilgi güçlü; teklif ve ürün faydasını daha net bağla."
+    )
+    return {
+        "hook": hook,
+        "angle": angle,
+        "format": format_note,
+        "proof": proof,
+        "cta": cta,
+    }
+
+
 def _result(
     ad: dict[str, Any],
     label: str,
@@ -13,13 +69,18 @@ def _result(
     reason: str,
     priority: str,
 ) -> dict[str, Any]:
-    return {
+    result = {
         **ad,
         "creative_label": label,
         "creative_recommendation": recommendation,
         "creative_reason": reason,
         "creative_priority": priority,
     }
+    score, health_status = creative_health(result)
+    result["health_score"] = score
+    result["health_status"] = health_status
+    result["creative_brief"] = build_creative_brief(result)
+    return result
 
 
 def evaluate_creative(ad: dict[str, Any]) -> dict[str, Any]:

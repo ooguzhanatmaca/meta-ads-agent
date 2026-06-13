@@ -189,3 +189,21 @@ def test_get_performance_report_for_explicit_period(mock_get: Mock) -> None:
 def test_get_performance_report_rejects_unknown_level() -> None:
     with pytest.raises(MetaConfigurationError, match="Desteklenmeyen"):
         build_client().get_performance_report("unknown")
+
+
+@patch("app.meta.client.requests.get")
+def test_get_ad_daily_insights_uses_daily_increment(mock_get: Mock) -> None:
+    mock_get.return_value = Mock(ok=True)
+    mock_get.return_value.json.return_value = {
+        "data": [{"ad_id": "1", "date_start": "2026-06-01"}]
+    }
+
+    rows = build_client().get_ad_daily_insights_for_period(
+        "2026-06-01", "2026-06-07"
+    )
+
+    assert rows[0]["ad_id"] == "1"
+    params = mock_get.call_args.kwargs["params"]
+    assert params["level"] == "ad"
+    assert params["time_increment"] == "1"
+    assert "access_token" not in str(mock_get.call_args)
