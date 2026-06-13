@@ -376,6 +376,64 @@ class MetaClient:
             },
         )
 
+    def create_ad_set(
+        self,
+        campaign_id: str,
+        name: str,
+        daily_budget_minor: int,
+        optimization_goal: str = "LINK_CLICKS",
+        billing_event: str = "IMPRESSIONS",
+        countries: tuple[str, ...] = ("TR",),
+        age_min: int = 18,
+        age_max: int = 65,
+        status: str = "PAUSED",
+        pixel_id: str | None = None,
+        custom_event_type: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a PAUSED ad set under a campaign with basic targeting."""
+        url = (
+            f"https://graph.facebook.com/{self.graph_api_version}/"
+            f"{self.ad_account_id}/adsets"
+        )
+        targeting = {
+            "geo_locations": {"countries": list(countries)},
+            "age_min": age_min,
+            "age_max": age_max,
+        }
+        data: dict[str, Any] = {
+            "name": name,
+            "campaign_id": campaign_id,
+            "daily_budget": daily_budget_minor,
+            "billing_event": billing_event,
+            "optimization_goal": optimization_goal,
+            "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
+            "status": status,
+            "targeting": json.dumps(targeting),
+        }
+        if pixel_id:
+            data["promoted_object"] = json.dumps(
+                {"pixel_id": pixel_id, "custom_event_type": custom_event_type or "PURCHASE"}
+            )
+        return self._post(url, data)
+
+    def create_ad(
+        self, adset_id: str, name: str, creative_id: str, status: str = "PAUSED"
+    ) -> dict[str, Any]:
+        """Create a PAUSED ad in an ad set using an existing creative."""
+        url = (
+            f"https://graph.facebook.com/{self.graph_api_version}/"
+            f"{self.ad_account_id}/ads"
+        )
+        return self._post(
+            url,
+            {
+                "name": name,
+                "adset_id": adset_id,
+                "creative": json.dumps({"creative_id": creative_id}),
+                "status": status,
+            },
+        )
+
     def update_entity(self, entity_id: str, fields: dict[str, Any]) -> dict[str, Any]:
         """Update a campaign/ad set/ad (e.g. status or daily_budget)."""
         url = f"https://graph.facebook.com/{self.graph_api_version}/{entity_id}"
@@ -471,6 +529,36 @@ def create_campaign(
 ) -> dict[str, Any]:
     """Create a PAUSED campaign for the configured account."""
     return MetaClient.from_env().create_campaign(name, objective, status)
+
+
+def create_ad_set(
+    campaign_id: str,
+    name: str,
+    daily_budget_minor: int,
+    optimization_goal: str = "LINK_CLICKS",
+    countries: tuple[str, ...] = ("TR",),
+    age_min: int = 18,
+    age_max: int = 65,
+    pixel_id: str | None = None,
+    custom_event_type: str | None = None,
+) -> dict[str, Any]:
+    """Create a PAUSED ad set under a campaign."""
+    return MetaClient.from_env().create_ad_set(
+        campaign_id,
+        name,
+        daily_budget_minor,
+        optimization_goal=optimization_goal,
+        countries=countries,
+        age_min=age_min,
+        age_max=age_max,
+        pixel_id=pixel_id,
+        custom_event_type=custom_event_type,
+    )
+
+
+def create_ad(adset_id: str, name: str, creative_id: str) -> dict[str, Any]:
+    """Create a PAUSED ad in an ad set using an existing creative."""
+    return MetaClient.from_env().create_ad(adset_id, name, creative_id)
 
 
 def set_entity_status(entity_id: str, status: str) -> dict[str, Any]:

@@ -3,6 +3,8 @@ from agents import Agent
 from app.tools.meta_account import get_meta_ad_account_info
 from app.tools.meta_write import (
     activate_entity,
+    create_ad_set_tool,
+    create_ad_tool,
     create_paused_campaign,
     pause_entity,
     update_daily_budget,
@@ -66,8 +68,12 @@ meta_ads_agent = Agent(
       araçları hesabı GERÇEKTEN değiştirir.
     - Bir yazma aracını çağırmadan ÖNCE ne yapacağını net bir cümleyle özetle ve
       kullanıcıdan AÇIK onay iste ("Onaylıyor musunuz?"). Onay gelmeden ÇAĞIRMA.
-    - Yeni kampanyalar daima DURAKLATILMIŞ oluşturulur; kullanıcıya Ads Manager'dan
-      kontrol edip yayına almasını hatırlat.
+    - Yeni kampanya/reklam seti/reklam daima DURAKLATILMIŞ oluşturulur; kullanıcıya
+      Ads Manager'dan kontrol edip yayına almasını hatırlat.
+    - Tam kampanya kurulumu sırası: create_paused_campaign → create_ad_set_tool
+      (kampanya id'siyle) → create_ad_tool (reklam seti id'si + mevcut creative_id).
+      Her adımda dönen id'yi bir sonrakinde kullan. Reklam için mevcut bir
+      creative_id gerekir (reklam raporundan alınabilir).
     - activate_entity ve update_daily_budget doğrudan HARCAMAYI etkiler; bunlarda
       ekstra dikkatli ol, yalnızca kullanıcı çok net isterse çağır.
     - Bir araç "yazma işlemleri kapalı" derse, kullanıcıya .env'de
@@ -119,6 +125,8 @@ meta_ads_agent = Agent(
         get_period_comparison,
         get_executive_summary,
         create_paused_campaign,
+        create_ad_set_tool,
+        create_ad_tool,
         pause_entity,
         activate_entity,
         update_daily_budget,

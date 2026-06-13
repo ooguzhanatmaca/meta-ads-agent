@@ -88,3 +88,52 @@ def test_budget_blocked_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
         out = mw._update_daily_budget("123", 500)
     assert budget.called is False
     assert "KAPALI" in out
+
+
+def test_ad_set_creates_paused_with_budget_conversion(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    calls = {}
+
+    def fake_create_ad_set(campaign_id, name, minor, **kwargs):
+        calls.update(campaign_id=campaign_id, name=name, minor=minor, kwargs=kwargs)
+        return {"id": "23800"}
+
+    with patch.object(mw, "create_ad_set", side_effect=fake_create_ad_set):
+        out = mw._create_ad_set("12090", "Set A", 300, country="TR", age_min=25, age_max=45)
+
+    assert calls["campaign_id"] == "12090"
+    assert calls["minor"] == 30000  # 300 TL -> 30000 kuruş
+    assert calls["kwargs"]["age_min"] == 25
+    assert "DURAKLATILMIŞ" in out and "23800" in out
+
+
+def test_ad_set_invalid_goal_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    with patch.object(mw, "create_ad_set") as create:
+        out = mw._create_ad_set("1", "Set", 100, optimization_goal="GECERSIZ")
+    assert create.called is False
+    assert "Geçersiz" in out
+
+
+def test_ad_set_blocked_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "false")
+    with patch.object(mw, "create_ad_set") as create:
+        out = mw._create_ad_set("1", "Set", 100)
+    assert create.called is False
+    assert "KAPALI" in out
+
+
+def test_ad_creates_paused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    with patch.object(mw, "create_ad", return_value={"id": "67800"}) as create:
+        out = mw._create_ad("23800", "Reklam A", "creative_999")
+    create.assert_called_once_with("23800", "Reklam A", "creative_999")
+    assert "DURAKLATILMIŞ" in out and "67800" in out
+
+
+def test_ad_blocked_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "false")
+    with patch.object(mw, "create_ad") as create:
+        out = mw._create_ad("1", "Reklam", "c1")
+    assert create.called is False
+    assert "KAPALI" in out

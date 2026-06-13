@@ -15,6 +15,8 @@ from agents import function_tool
 
 from app.meta.client import (
     MetaAPIError,
+    create_ad,
+    create_ad_set,
     create_campaign,
     set_daily_budget,
     set_entity_status,
@@ -58,6 +60,65 @@ def _create_paused_campaign(name: str, objective: str = "OUTCOME_TRAFFIC") -> st
     return (
         f"Kampanya DURAKLATILMIŞ olarak oluşturuldu (id: {result.get('id')}). "
         "Harcama başlamaz; Ads Manager'dan kontrol edip yayına alabilirsiniz."
+    )
+
+
+VALID_OPTIMIZATION_GOALS = {
+    "LINK_CLICKS",
+    "LANDING_PAGE_VIEWS",
+    "OFFSITE_CONVERSIONS",
+    "REACH",
+    "IMPRESSIONS",
+    "THRUPLAY",
+}
+
+
+def _create_ad_set(
+    campaign_id: str,
+    name: str,
+    daily_budget_try: float,
+    optimization_goal: str = "LINK_CLICKS",
+    country: str = "TR",
+    age_min: int = 18,
+    age_max: int = 65,
+    pixel_id: str = "",
+    custom_event_type: str = "",
+) -> str:
+    if not _writes_enabled():
+        return DISABLED_MESSAGE
+    if optimization_goal not in VALID_OPTIMIZATION_GOALS:
+        return f"Geçersiz optimizasyon hedefi. Geçerli: {', '.join(sorted(VALID_OPTIMIZATION_GOALS))}."
+    minor = int(round(float(daily_budget_try) * 100))
+    try:
+        result = create_ad_set(
+            campaign_id,
+            name,
+            minor,
+            optimization_goal=optimization_goal,
+            countries=(country,),
+            age_min=age_min,
+            age_max=age_max,
+            pixel_id=pixel_id or None,
+            custom_event_type=custom_event_type or None,
+        )
+    except MetaAPIError as error:
+        return f"Reklam seti oluşturulamadı: {error}"
+    return (
+        f"Reklam seti DURAKLATILMIŞ olarak oluşturuldu (id: {result.get('id')}). "
+        f"Günlük bütçe {daily_budget_try:.2f} TL, hedef ülke {country}, yaş {age_min}-{age_max}."
+    )
+
+
+def _create_ad(adset_id: str, name: str, creative_id: str) -> str:
+    if not _writes_enabled():
+        return DISABLED_MESSAGE
+    try:
+        result = create_ad(adset_id, name, creative_id)
+    except MetaAPIError as error:
+        return f"Reklam oluşturulamadı: {error}"
+    return (
+        f"Reklam DURAKLATILMIŞ olarak oluşturuldu (id: {result.get('id')}). "
+        "Ads Manager'dan kontrol edip yayına alabilirsiniz."
     )
 
 
@@ -105,6 +166,56 @@ def create_paused_campaign(name: str, objective: str = "OUTCOME_TRAFFIC") -> str
             OUTCOME_ENGAGEMENT, OUTCOME_AWARENESS, OUTCOME_APP_PROMOTION.
     """
     return _create_paused_campaign(name, objective)
+
+
+@function_tool
+def create_ad_set_tool(
+    campaign_id: str,
+    name: str,
+    daily_budget_try: float,
+    optimization_goal: str = "LINK_CLICKS",
+    country: str = "TR",
+    age_min: int = 18,
+    age_max: int = 65,
+    pixel_id: str = "",
+    custom_event_type: str = "",
+) -> str:
+    """Bir kampanya altında DURAKLATILMIŞ reklam seti oluşturur (temel hedefleme).
+
+    Yalnızca kullanıcının açık onayından sonra çağır. Dönüşüm optimizasyonu
+    (OFFSITE_CONVERSIONS) için pixel_id gerekir.
+
+    Args:
+        campaign_id: Üst kampanyanın ID'si (önce create_paused_campaign ile alın).
+        name: Reklam seti adı.
+        daily_budget_try: Günlük bütçe (TL).
+        optimization_goal: LINK_CLICKS, LANDING_PAGE_VIEWS, OFFSITE_CONVERSIONS,
+            REACH, IMPRESSIONS veya THRUPLAY.
+        country: Hedef ülke kodu (ör. TR).
+        age_min: Minimum yaş.
+        age_max: Maksimum yaş.
+        pixel_id: Dönüşüm optimizasyonu için pixel ID (opsiyonel).
+        custom_event_type: pixel ile birlikte olay türü (ör. PURCHASE).
+    """
+    return _create_ad_set(
+        campaign_id, name, daily_budget_try, optimization_goal, country,
+        age_min, age_max, pixel_id, custom_event_type,
+    )
+
+
+@function_tool
+def create_ad_tool(adset_id: str, name: str, creative_id: str) -> str:
+    """Bir reklam seti içinde, MEVCUT bir kreatifi kullanarak DURAKLATILMIŞ reklam oluşturur.
+
+    Yalnızca kullanıcının açık onayından sonra çağır. creative_id'yi mevcut bir
+    reklamdan alabilirsiniz (reklam raporundaki creative_id alanı).
+
+    Args:
+        adset_id: Reklamın ekleneceği reklam setinin ID'si.
+        name: Reklam adı.
+        creative_id: Kullanılacak mevcut kreatifin ID'si.
+    """
+    return _create_ad(adset_id, name, creative_id)
 
 
 @function_tool
