@@ -96,3 +96,40 @@ meta_ads_agent = Agent(
         get_executive_summary,
     ],
 )
+
+
+def _sanitize_tool_schemas(agent: Agent) -> None:
+    """Broaden provider compatibility (Groq vb.).
+
+    - Default değeri olan parametreleri 'required'dan çıkar (gerçekte opsiyonel).
+    - Boş kalan 'required' alanını ve strict modu kaldır; aksi halde Groq gibi
+      katı sağlayıcılar şemayı reddediyor (Gemini/OpenAI için de zararsız).
+    """
+    for tool in agent.tools:
+        schema = getattr(tool, "params_json_schema", None)
+        if not isinstance(schema, dict):
+            continue
+        properties = schema.get("properties") or {}
+        required = schema.get("required")
+        if isinstance(required, list):
+            kept = [
+                name
+                for name in required
+                if not (
+                    isinstance(properties.get(name), dict)
+                    and "default" in properties[name]
+                )
+            ]
+            if kept:
+                schema["required"] = kept
+            else:
+                schema.pop("required", None)
+        # Strict mod, tüm parametrelerin required olmasını şart koşar; kapat.
+        if getattr(tool, "strict_json_schema", None):
+            try:
+                tool.strict_json_schema = False
+            except (AttributeError, TypeError):
+                pass
+
+
+_sanitize_tool_schemas(meta_ads_agent)
