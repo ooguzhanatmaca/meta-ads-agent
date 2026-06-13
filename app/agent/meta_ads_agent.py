@@ -1,6 +1,12 @@
 from agents import Agent
 
 from app.tools.meta_account import get_meta_ad_account_info
+from app.tools.meta_write import (
+    activate_entity,
+    create_paused_campaign,
+    pause_entity,
+    update_daily_budget,
+)
 from app.tools.meta_reports import (
     analyze_ad_creative,
     check_meta_connection,
@@ -53,9 +59,19 @@ meta_ads_agent = Agent(
     DÜRÜSTLÜK VE GÜVENLİK (asla taviz verme):
     - Verilere yalnızca araçlar üzerinden eriş; metrik veya veri UYDURMA.
     - Meta hesabına erişim yoksa bunu açıkça belirt.
-    - Kullanıcının açık onayı olmadan reklam KAPATMA, bütçe DEĞİŞTİRME önerisini
-      uygulama (yalnızca analiz/öneri sunarsın; aksiyonu kullanıcı uygular).
     - Bir araç hata mesajı döndürürse sorunu açıkça aktar; veri uydurma.
+
+    YAZMA İŞLEMLERİ (operatör modu — gerçek hesabı değiştirir):
+    - create_paused_campaign, pause_entity, activate_entity, update_daily_budget
+      araçları hesabı GERÇEKTEN değiştirir.
+    - Bir yazma aracını çağırmadan ÖNCE ne yapacağını net bir cümleyle özetle ve
+      kullanıcıdan AÇIK onay iste ("Onaylıyor musunuz?"). Onay gelmeden ÇAĞIRMA.
+    - Yeni kampanyalar daima DURAKLATILMIŞ oluşturulur; kullanıcıya Ads Manager'dan
+      kontrol edip yayına almasını hatırlat.
+    - activate_entity ve update_daily_budget doğrudan HARCAMAYI etkiler; bunlarda
+      ekstra dikkatli ol, yalnızca kullanıcı çok net isterse çağır.
+    - Bir araç "yazma işlemleri kapalı" derse, kullanıcıya .env'de
+      ENABLE_WRITE_ACTIONS=true yapması gerektiğini söyle.
 
     HANGİ ARAÇ NE ZAMAN:
     - Genel durum: get_account_summary
@@ -102,6 +118,10 @@ meta_ads_agent = Agent(
         export_excel_report,
         get_period_comparison,
         get_executive_summary,
+        create_paused_campaign,
+        pause_entity,
+        activate_entity,
+        update_daily_budget,
     ],
 )
 

@@ -330,6 +330,65 @@ class MetaClient:
 
         return payload
 
+    def _post(self, url: str, data: dict[str, Any]) -> dict[str, Any]:
+        """Send an authenticated POST (write) request without exposing credentials."""
+        try:
+            response = requests.post(
+                url,
+                headers={"Authorization": f"Bearer {self._access_token}"},
+                data=data,
+                timeout=self.timeout,
+            )
+        except requests.Timeout as error:
+            raise MetaRequestError("Meta API isteği zaman aşımına uğradı.") from error
+        except requests.RequestException as error:
+            raise MetaRequestError("Meta API bağlantısı kurulamadı.") from error
+
+        try:
+            payload = response.json()
+        except requests.exceptions.JSONDecodeError as error:
+            raise MetaResponseError("Meta API geçersiz bir yanıt döndürdü.") from error
+
+        if not response.ok:
+            raise self._response_error(response.status_code, payload)
+        if not isinstance(payload, dict):
+            raise MetaResponseError("Meta API beklenmeyen bir yanıt döndürdü.")
+        return payload
+
+    def create_campaign(
+        self,
+        name: str,
+        objective: str = "OUTCOME_TRAFFIC",
+        status: str = "PAUSED",
+    ) -> dict[str, Any]:
+        """Create a campaign (PAUSED by default — no spend until activated)."""
+        url = (
+            f"https://graph.facebook.com/{self.graph_api_version}/"
+            f"{self.ad_account_id}/campaigns"
+        )
+        return self._post(
+            url,
+            {
+                "name": name,
+                "objective": objective,
+                "status": status,
+                "special_ad_categories": json.dumps([]),
+            },
+        )
+
+    def update_entity(self, entity_id: str, fields: dict[str, Any]) -> dict[str, Any]:
+        """Update a campaign/ad set/ad (e.g. status or daily_budget)."""
+        url = f"https://graph.facebook.com/{self.graph_api_version}/{entity_id}"
+        return self._post(url, fields)
+
+    def set_entity_status(self, entity_id: str, status: str) -> dict[str, Any]:
+        """Set an entity's status to ACTIVE or PAUSED."""
+        return self.update_entity(entity_id, {"status": status})
+
+    def set_daily_budget(self, entity_id: str, daily_budget_minor: int) -> dict[str, Any]:
+        """Set an entity's daily budget (in account-currency minor units, e.g. kuruş)."""
+        return self.update_entity(entity_id, {"daily_budget": daily_budget_minor})
+
     def test_connection(self) -> bool:
         """Verify that the configured account can be read."""
         self.get_ad_account_info()
@@ -405,3 +464,20 @@ def get_ad_daily_insights_for_period(
 def get_account_daily_insights(since: str, until: str) -> list[dict[str, Any]]:
     """Read account-level daily insight rows for the configured account."""
     return MetaClient.from_env().get_account_daily_insights(since, until)
+
+
+def create_campaign(
+    name: str, objective: str = "OUTCOME_TRAFFIC", status: str = "PAUSED"
+) -> dict[str, Any]:
+    """Create a PAUSED campaign for the configured account."""
+    return MetaClient.from_env().create_campaign(name, objective, status)
+
+
+def set_entity_status(entity_id: str, status: str) -> dict[str, Any]:
+    """Set a campaign/ad set/ad status (ACTIVE or PAUSED)."""
+    return MetaClient.from_env().set_entity_status(entity_id, status)
+
+
+def set_daily_budget(entity_id: str, daily_budget_minor: int) -> dict[str, Any]:
+    """Set a campaign/ad set daily budget (minor currency units)."""
+    return MetaClient.from_env().set_daily_budget(entity_id, daily_budget_minor)
