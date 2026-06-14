@@ -19,6 +19,7 @@ from app.meta.account_summary import calculate_summary
 from app.meta.client import (
     MetaAPIError,
     get_account_insights,
+    get_entity,
     get_performance_report,
 )
 from app.meta.performance_report import calculate_report_rows
@@ -72,6 +73,22 @@ def _save_snapshot(level: str = "account", date_preset: str = "last_7d") -> str:
     )
 
 
+def _entity_is_real(level: str, entity_id: str) -> bool:
+    """Verify the entity actually exists in the account (anti-hallucination guard).
+
+    Account-level / empty ids skip the check; real entities are confirmed with a
+    cheap GET. Returns True if it exists or can't be verified for a non-API reason.
+    """
+    eid = str(entity_id or "").strip()
+    if level == "account" or eid in ("", "account", "-"):
+        return True
+    try:
+        get_entity(eid, "id")
+        return True
+    except MetaAPIError:
+        return False
+
+
 def _log_recommendation(
     level: str,
     entity_id: str,
@@ -81,6 +98,11 @@ def _log_recommendation(
     metric_name: str = "",
     metric_value: float = 0.0,
 ) -> str:
+    if not _entity_is_real(level, entity_id):
+        return (
+            f"'{entity_id}' hesapta bulunamadı; öneri KAYDEDİLMEDİ. Gerçek bir "
+            "reklam/reklam seti/kampanya ID'si kullan (rapordan al, uydurma)."
+        )
     conn = history.connect()
     try:
         rec_id = history.record_recommendation(
