@@ -16,7 +16,7 @@ bütçe önerileri, anomali tespiti, trend takibi ve raporlama yapar.
 
 ## Özellikler
 
-Agent sohbet içinde 28 araç kullanır (20 analiz + 8 operatör).
+Agent sohbet içinde 33 araç kullanır (20 analiz + 8 operatör + 5 hafıza/takip).
 
 ### Analiz araçları
 
@@ -56,12 +56,27 @@ Agent sohbet içinde 28 araç kullanır (20 analiz + 8 operatör).
 | **Durdur / Aktifleştir** | Kampanya/set/reklamı duraklatır veya yayına alır |
 | **Bütçe güncelle** | Günlük bütçeyi değiştirir (TL) |
 
+### Kalıcı hafıza ve takip (sürekli danışmanlık)
+
+> Agent verdiği önerileri ve günlük metrikleri yerel bir SQLite dosyasına
+> (`data/history.db`, `.gitignore`'da) kaydeder; böylece anlık analist değil,
+> geçmişi hatırlayan bir danışman gibi davranır.
+
+| Konu | Ne yapar |
+|------|----------|
+| **Öneri günlüğü** | Verdiği somut aksiyon önerilerini (varlık + metrik) kaydeder |
+| **Öneri takibi** | "Geçen sefer ne önerdin, işe yaradı mı?" — güncel metrikle karşılaştırır |
+| **Metrik geçmişi** | Bir varlığın ROAS/CPA vb. uzun dönem trendini (biriken snapshot'lar) |
+| **Anlık görüntü** | Mevcut metrikleri geçmişe kaydeder (günlük rapor bunu otomatik yapar) |
+| **Sonuç işaretle** | Bir öneriyi "uygulandı / geçersiz" olarak işaretler |
+
 Ek olarak:
 - **Sohbet hafızası** — takip sorularını ("peki onu kapatsam?") hatırlar
 - **Esnek tarih** — "son 30 gün", "bu ay", "dün" gibi dönemler
 - **Çok modelli fallback** — bir model dolarsa otomatik sıradakini dener
 - **Streamlit dashboard** — grafikli görsel panel (trend sekmesi dahil)
-- **Günlük e-posta raporu** — uyarılı yönetici özetini Gmail ile gönderir
+- **Günlük e-posta raporu** — uyarılı yönetici özetini Gmail ile gönderir;
+  aynı anda günün metriklerini geçmişe kaydeder (trend/takip için birikir)
 
 ---
 
@@ -137,6 +152,7 @@ Sohbette örnek sorular:
 - "25-34 yaş grubu nasıl performans gösteriyor?"
 - "Bu hafta nasıldı?" / "Excel raporu çıkar"
 - "Yeni ne deneyebilirim?" / "Bu kampanya neden düştü?"
+- "Geçen sefer ne önermiştin, işe yaradı mı?" / "Bu kampanyanın ROAS'ı zamanla nasıl gitti?"
 - (Operatör modu açıkken) "Kazanan reklam setini %50 bütçeyle klonla"
 
 ---

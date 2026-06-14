@@ -19,9 +19,16 @@ from email.message import EmailMessage
 
 from dotenv import load_dotenv
 
+from app.meta.account_summary import calculate_summary
 from app.meta.anomaly_report import collect_alerts, format_alerts
-from app.meta.client import MetaAPIError
+from app.meta.client import (
+    MetaAPIError,
+    get_account_insights,
+    get_performance_report,
+)
 from app.meta.executive_summary import build_executive_summary
+from app.meta.performance_report import calculate_report_rows
+from app.meta import history
 
 
 DEFAULT_SMTP_HOST = "smtp.gmail.com"
@@ -60,6 +67,38 @@ def send_email(message: EmailMessage) -> None:
         server.send_message(message)
 
 
+def save_daily_snapshots() -> None:
+    """Persist today's metrics so the agent builds longitudinal history over time.
+
+    Best-effort: any failure here must not block the e-mail report.
+    """
+    try:
+        from app.meta.client import MetaClient
+
+        account_id = MetaClient.from_env().ad_account_id
+    except Exception:  # noqa: BLE001
+        account_id = "-"
+
+    conn = history.connect()
+    try:
+        summary = calculate_summary(get_account_insights("last_7d"))
+        reach = summary.get("reach") or 0
+        summary["frequency"] = summary["impressions"] / reach if reach else 0.0
+        history.save_snapshot(
+            conn,
+            "account",
+            [{"id": "account", "name": "Hesap", "status": "-", **summary}],
+            account_id=account_id,
+        )
+        for level in ("campaign", "adset", "ad"):
+            rows = calculate_report_rows(get_performance_report(level, "last_7d"))
+            history.save_snapshot(conn, level, rows, account_id=account_id)
+    except MetaAPIError as error:
+        print(f"Snapshot kaydedilemedi (rapor yine de gönderilecek): {error}")
+    finally:
+        conn.close()
+
+
 def main() -> int:
     load_dotenv()
 
@@ -73,6 +112,9 @@ def main() -> int:
     except MetaAPIError as error:
         print(f"Rapor oluşturulamadı: {error}")
         return 1
+
+    # Geçmiş, agent'ın trend/öneri takibi için zamanla birikir.
+    save_daily_snapshots()
 
     today = date.today().isoformat()
     # E-posta uyarılarla başlar, ardından tam yönetici özeti gelir.

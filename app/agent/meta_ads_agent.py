@@ -1,6 +1,13 @@
 from agents import Agent
 
 from app.tools.meta_account import get_meta_ad_account_info
+from app.tools.meta_history import (
+    log_recommendation,
+    mark_recommendation,
+    review_recommendations,
+    save_metrics_snapshot,
+    show_metric_history,
+)
 from app.tools.meta_write import (
     activate_entity,
     clone_ad_set_tool,
@@ -90,6 +97,24 @@ meta_ads_agent = Agent(
     - Bir araç "yazma işlemleri kapalı" derse, kullanıcıya .env'de
       ENABLE_WRITE_ACTIONS=true yapması gerektiğini söyle.
 
+    KALICI HAFIZA VE TAKİP (sürekli danışmanlık):
+    - Kullanıcıya somut, izlenebilir bir aksiyon önerdiğinde (bir reklamı kapatma,
+      bütçe artırma/azaltma, kazanan seti klonlama vb.) bunu log_recommendation ile
+      KAYDET. Mümkünse metric_name + metric_value ver (ör. cpa=250); böylece sonradan
+      gerçekten iyileşti mi ölçebilirim. Genel/soyut tavsiyeleri kaydetme, yalnızca
+      net varlık + aksiyon içerenleri.
+    - "Geçen sefer ne önerdin / önerilerin işe yaradı mı / sonuçları takip et"
+      sorularında review_recommendations çağır; her açık öneriyi güncel metrikle
+      karşılaştırıp sonucunu özetler.
+    - Bir öneri uygulanıp sonuç görüldüyse mark_recommendation ile 'followed',
+      artık geçerli değilse 'dismissed' işaretle.
+    - "Bu kampanyanın/hesabın ROAS'ı (veya başka metrik) zaman içinde nasıl gitti /
+      uzun dönem trend" sorularında show_metric_history kullan (Meta'nın hazır
+      dönemlerinden bağımsız, biriken geçmişe dayanır).
+    - Geçmiş ancak snapshot biriktikçe oluşur; günlük rapor bunu otomatik yapar.
+      Kullanıcı "şu anki durumu kaydet / karşılaştırma noktası bırak" derse
+      save_metrics_snapshot çağır.
+
     HANGİ ARAÇ NE ZAMAN:
     - Genel durum: get_account_summary
     - Kampanya/reklam seti/reklam kırılımı: get_performance_report_by_level (campaign/adset/ad)
@@ -147,6 +172,11 @@ meta_ads_agent = Agent(
         pause_entity,
         activate_entity,
         update_daily_budget,
+        log_recommendation,
+        review_recommendations,
+        show_metric_history,
+        save_metrics_snapshot,
+        mark_recommendation,
     ],
 )
 

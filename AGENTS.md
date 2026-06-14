@@ -23,7 +23,7 @@ modeller LiteLLM ile çağrılır (varsayılan Google Gemini, fallback zinciri i
 ```
 app/
 ├── agent/    # Agent tanımı (meta_ads_agent.py) + model fallback zinciri
-├── meta/     # Meta API client + raporlar/trend/anomali/simülasyon/görsel (saf mantık)
+├── meta/     # Meta API client + raporlar/trend/anomali/simülasyon/görsel + history (saf mantık)
 ├── rules/    # Performans, kreatif, bütçe, anomali, fırsat, teşhis kuralları (deterministik)
 ├── tools/    # @function_tool sarmalayıcıları — agent'ın gördüğü arayüz
 ├── run_agent.py / send_report.py / dashboard.py   # Giriş noktaları
@@ -46,3 +46,12 @@ asıl mantık `meta/` ve `rules/` içinde, test edilebilir saf fonksiyonlardadı
   kurumsal ve emojisizdir (bkz. `meta_ads_agent.py` içindeki instructions).
 - Yeni bir araç eklediğinde `app/agent/meta_ads_agent.py` içindeki `tools=[...]`
   listesine ve "HANGİ ARAÇ NE ZAMAN" yönergesine de eklemeyi unutma.
+
+## Kalıcı hafıza (`app/meta/history.py`)
+
+Agent verdiği önerileri ve günlük metrik snapshot'larını yerel SQLite'a
+(`data/history.db`, `.gitignore`'da; `HISTORY_DB_PATH` ile değiştirilebilir) yazar.
+`history.py` fonksiyonları daima açık bir `conn` alır — testler `connect(":memory:")`
+kullanır. Snapshot'lar `app/send_report.py` içindeki `save_daily_snapshots()` ile
+günlük cron'da otomatik birikir. Yeni metrik izlemek için `TRACKED_METRICS`'e
+sütun ekle.
