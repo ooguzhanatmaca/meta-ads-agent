@@ -208,6 +208,38 @@ def test_ad_set_no_interests_passes_none(monkeypatch: pytest.MonkeyPatch) -> Non
     assert calls["kwargs"]["interests"] is None
 
 
+def test_budget_ceiling_blocks_typo(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    monkeypatch.setenv("MAX_DAILY_BUDGET_TRY", "50000")
+    # 300.000 TL (3.000 yerine yazım hatası) -> tavanı aşar, yazma yapılmaz.
+    with patch.object(mw, "set_daily_budget") as budget:
+        out = mw._update_daily_budget("123", 300000)
+    assert budget.called is False
+    assert "Güvenlik tavanı" in out
+    with patch.object(mw, "create_ad_set") as create:
+        out2 = mw._create_ad_set("c", "Set", 300000)
+    assert create.called is False
+    assert "Güvenlik tavanı" in out2
+
+
+def test_budget_ceiling_allows_normal(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    monkeypatch.setenv("MAX_DAILY_BUDGET_TRY", "50000")
+    with patch.object(mw, "set_daily_budget") as budget:
+        out = mw._update_daily_budget("123", 3000)
+    budget.assert_called_once()
+    assert "Güvenlik tavanı" not in out
+
+
+def test_budget_ceiling_configurable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    monkeypatch.setenv("MAX_DAILY_BUDGET_TRY", "1000")
+    with patch.object(mw, "set_daily_budget") as budget:
+        out = mw._update_daily_budget("123", 3000)  # 1000 tavanını aşar
+    assert budget.called is False
+    assert "Güvenlik tavanı" in out
+
+
 def test_ad_set_invalid_goal_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
     with patch.object(mw, "create_ad_set") as create:

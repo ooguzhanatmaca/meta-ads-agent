@@ -51,6 +51,32 @@ def _writes_enabled() -> bool:
     }
 
 
+DEFAULT_MAX_DAILY_BUDGET_TRY = 50000.0
+
+
+def _max_daily_budget_try() -> float:
+    """Güvenlik tavanı: tek bir varlığa atanabilecek azami günlük bütçe (TL)."""
+    raw = os.getenv("MAX_DAILY_BUDGET_TRY", "").strip()
+    try:
+        value = float(raw)
+        return value if value > 0 else DEFAULT_MAX_DAILY_BUDGET_TRY
+    except ValueError:
+        return DEFAULT_MAX_DAILY_BUDGET_TRY
+
+
+def _budget_exceeds_ceiling(daily_budget_try: float) -> str | None:
+    """Bütçe tavanı aşılıyorsa açıklayıcı mesaj, değilse None döndürür."""
+    ceiling = _max_daily_budget_try()
+    if daily_budget_try > ceiling:
+        return (
+            f"Güvenlik tavanı: istenen günlük bütçe {daily_budget_try:,.0f} TL, "
+            f"izin verilen üst sınır {ceiling:,.0f} TL'yi aşıyor. Yazım hatası "
+            "olabilir (ör. 3.000 yerine 300.000). Gerçekten bu kadar isteniyorsa "
+            ".env içinde MAX_DAILY_BUDGET_TRY değerini yükseltin."
+        )
+    return None
+
+
 PREVIEW_PREFIX = "ÖNİZLEME (henüz uygulanmadı):"
 
 
@@ -138,6 +164,9 @@ def _create_ad_set(
         return DISABLED_MESSAGE
     if optimization_goal not in VALID_OPTIMIZATION_GOALS:
         return f"Geçersiz optimizasyon hedefi. Geçerli: {', '.join(sorted(VALID_OPTIMIZATION_GOALS))}."
+    ceiling_warning = _budget_exceeds_ceiling(daily_budget_try)
+    if ceiling_warning:
+        return ceiling_warning
     genders, gender_label = _genders_from(gender)
     interests = _parse_interest_ids(interest_ids)
     minor = int(round(float(daily_budget_try) * 100))
@@ -264,6 +293,9 @@ def _activate_entity(entity_id: str, dry_run: bool = False) -> str:
 def _update_daily_budget(
     entity_id: str, daily_budget_try: float, dry_run: bool = False
 ) -> str:
+    ceiling_warning = _budget_exceeds_ceiling(daily_budget_try)
+    if ceiling_warning:
+        return ceiling_warning
     if dry_run:
         snap = _entity_snapshot(entity_id)
         label = f"'{snap['name']}' ({entity_id})" if snap.get("name") else entity_id

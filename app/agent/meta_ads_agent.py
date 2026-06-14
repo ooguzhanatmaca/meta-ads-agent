@@ -249,6 +249,10 @@ meta_ads_agent = Agent(
       ekstra dikkatli ol, yalnızca kullanıcı çok net isterse çağır.
     - Bir araç "yazma işlemleri kapalı" derse, kullanıcıya .env'de
       ENABLE_WRITE_ACTIONS=true yapması gerektiğini söyle.
+    - GÜVENLİK TAVANI: Günlük bütçe bir üst sınırı (varsayılan 50.000 TL) aşarsa
+      araç "Güvenlik tavanı" mesajı döndürür ve işlemi yapmaz. Bu genelde yazım
+      hatasıdır (ör. 3.000 yerine 300.000). Kullanıcıya bunu açıkla; gerçekten o
+      kadar isteniyorsa .env'de MAX_DAILY_BUDGET_TRY artırılmalı.
 
     KALICI HAFIZA VE TAKİP (sürekli danışmanlık):
     - Kullanıcıya somut, izlenebilir bir aksiyon önerdiğinde (bir reklamı kapatma,

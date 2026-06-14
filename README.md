@@ -16,7 +16,7 @@ bütçe önerileri, anomali tespiti, trend takibi ve raporlama yapar.
 
 ## Özellikler
 
-Agent sohbet içinde 34 araç kullanır (21 analiz + 8 operatör + 5 hafıza/takip).
+Agent sohbet içinde 36 araç kullanır (23 analiz + 8 operatör + 5 hafıza/takip).
 
 ### Analiz araçları
 
@@ -34,6 +34,8 @@ Agent sohbet içinde 34 araç kullanır (21 analiz + 8 operatör + 5 hafıza/tak
 | **Demografik kırılım** | Yaş / cinsiyet / yerleşim / platform / ülke / cihaz |
 | **Anomali uyarıları** | CPA artışı, ROAS düşüşü, satışsız harcama, kreatif yorgunluğu |
 | **İzleme sağlığı** | Piksel/dönüşüm denetimi: olay hunisi, tazelik, "satın alma ölçülmüyor" gibi kritik sorunlar |
+| **İlgi alanı arama** | İlgi alanı adını (ör. "streetwear") Meta hedefleme ID'lerine çevirir (kitle büyüklüğüyle) |
+| **Piksel bulucu** | Hesaba bağlı dönüşüm pikselini otomatik bulur (reklam kurarken sormaz) |
 | **Trend** | Günlük trend + mini grafik (sparkline) ve yorum |
 | **Senaryo (what-if)** | "Bütçeyi %X artırsam / kapatsam ne olur" tahmini |
 | **Haftalık özet** | Bu hafta vs geçen hafta + en iyi/kötü reklamlar + uyarılar |
@@ -50,12 +52,16 @@ Agent sohbet içinde 34 araç kullanır (21 analiz + 8 operatör + 5 hafıza/tak
 | Konu | Ne yapar |
 |------|----------|
 | **Kampanya oluştur** | Yeni kampanyayı duraklatılmış olarak açar |
-| **Reklam seti oluştur** | Kampanya altında temel hedeflemeyle set kurar |
-| **Kazanan seti klonla** | En iyi ROAS'lı setin gerçek ayarlarını kopyalayıp ölçekler |
+| **Reklam seti oluştur** | Kampanya altında hedeflemeyle set kurar (ülke, yaş, **cinsiyet**, **ilgi alanı**, piksel) |
+| **Kazanan seti klonla** | En iyi ROAS'lı setin gerçek ayarlarını (ilgi alanları dahil) kopyalayıp ölçekler |
 | **Reklam oluştur** | Mevcut bir kreatifle reklam ekler |
 | **Benzer (lookalike) kitle** | Kaynak kitleden lookalike kitle üretir |
 | **Durdur / Aktifleştir** | Kampanya/set/reklamı duraklatır veya yayına alır |
 | **Bütçe güncelle** | Günlük bütçeyi değiştirir (TL) |
+
+> **Güvenlik tavanı:** Tek bir set/kampanyaya atanacak günlük bütçe
+> `MAX_DAILY_BUDGET_TRY`'yi (varsayılan 50.000 TL) aşamaz — yazım hatalarını
+> (3.000 yerine 300.000) ve hatalı kararları yakalar.
 
 ### Kalıcı hafıza ve takip (sürekli danışmanlık)
 
@@ -177,6 +183,8 @@ Güvenlik garantileri:
 - **Dry-run önizlemesi:** Harcamayı/durumu değiştiren işlemlerde (bütçe, aktifleştir,
   durdur) agent önce hiçbir şeyi değiştirmeden gerçek veriyle bir önizleme gösterir
   (ör. "günlük bütçe 700 TL → 3.000 TL, %+329"), onayınızı alır, sonra uygular.
+- **Bütçe güvenlik tavanı:** Günlük bütçe `MAX_DAILY_BUDGET_TRY`'yi (varsayılan
+  50.000 TL) aşamaz; aşan istek (genelde yazım hatası) reddedilir.
 - **Hep duraklatılmış:** Oluşturulan kampanya/set/reklam DURAKLATILMIŞ gelir —
   siz Ads Manager'dan yayına almadıkça harcama başlamaz.
 - **İzin:** Meta erişim token'ınız `ads_management` iznine sahip olmalıdır.

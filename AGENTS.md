@@ -39,7 +39,8 @@ asıl mantık `meta/` ve `rules/` içinde, test edilebilir saf fonksiyonlardadı
   Oluşturulan her şey DURAKLATILMIŞ gelir. Harcamayı/durumu değiştiren araçlar
   (bütçe/aktifleştir/durdur) `dry_run=True` ile gerçek veriden bir önizleme
   döndürür (yazma yapmaz); agent önce önizler, onay alır, sonra `dry_run=False`
-  ile uygular.
+  ile uygular. Günlük bütçe `MAX_DAILY_BUDGET_TRY` tavanını (varsayılan 50.000)
+  aşamaz — yazım hatası/hatalı karar koruması (`_budget_exceeds_ceiling`).
 - **İzleme sağlığı** (`app/meta/tracking_health.py` + `app/rules/tracking_rules.py`):
   pikselin olay hunisini/tazeliğini denetler. Veri `client.get_pixels()` ve
   `client.get_pixel_stats()` salt-okunur metotlarından gelir. Kurallar saf ve
