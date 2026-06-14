@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 
 from app.meta.account_summary import calculate_summary
 from app.meta.anomaly_report import collect_alerts, format_alerts
+from app.meta.autopilot import build_autopilot_section
 from app.meta.client import (
     MetaAPIError,
     get_account_insights,
@@ -116,9 +117,21 @@ def main() -> int:
     # Geçmiş, agent'ın trend/öneri takibi için zamanla birikir.
     save_daily_snapshots()
 
+    # Autopilot (sadece öneri): geçmiş önerilerin sonucunu raporlar ve bugünkü
+    # kapatılmaya adayları izlemeye alır. Hesabı DEĞİŞTİRMEZ.
+    try:
+        autopilot = build_autopilot_section()
+    except Exception as error:  # noqa: BLE001 — rapor yine de gitsin
+        print(f"Autopilot bölümü oluşturulamadı: {error}")
+        autopilot = ""
+
     today = date.today().isoformat()
-    # E-posta uyarılarla başlar, ardından tam yönetici özeti gelir.
-    body = f"{format_alerts(alerts)}\n\n{'=' * 60}\n\n{summary}"
+    # E-posta: uyarılar → autopilot (öneri takibi) → tam yönetici özeti.
+    sections = [format_alerts(alerts)]
+    if autopilot:
+        sections.append(autopilot)
+    sections.append(summary)
+    body = f"\n\n{'=' * 60}\n\n".join(sections)
     if alerts:
         subject = f"⚠️ Meta Ads: {len(alerts)} uyarı - {today}"
     else:

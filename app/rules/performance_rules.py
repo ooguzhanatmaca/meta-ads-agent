@@ -15,6 +15,7 @@ def _recommendation(
     ad: dict[str, Any], recommendation: str, reason: str, priority: str
 ) -> dict[str, Any]:
     return {
+        "id": str(ad.get("id") or "-"),
         "name": ad.get("name") or "-",
         "spend": float(ad.get("spend") or 0),
         "purchases": float(ad.get("purchases") or 0),
