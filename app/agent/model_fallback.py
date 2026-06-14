@@ -68,6 +68,21 @@ def _is_rate_limit(exc: Exception) -> bool:
     return "429" in text or "insufficient_quota" in text or "quota" in text
 
 
+def _is_access_blocked(exc: Exception) -> bool:
+    """Provider won't serve this model (no credits, billing, suspended/forbidden).
+
+    These are not transient: the model simply can't run for this account, so we
+    skip to the next model in the chain instead of crashing the whole agent.
+    """
+    text = str(exc).lower()
+    if "credit balance" in text or "billing" in text or "purchase credits" in text:
+        return True
+    if "payment" in text and "required" in text:
+        return True
+    # 401/403: yetki/erişim engeli (anahtar geçersiz, izin yok) → bu modeli atla.
+    return "401" in text or "403" in text or "permission_error" in text
+
+
 def _is_provider_glitch(exc: Exception) -> bool:
     """Provider-side flakiness (ör. modelin bozuk araç çağrısı) — bu modeli atla."""
     text = str(exc).lower()
@@ -167,6 +182,8 @@ async def run_with_fallback(agent: Any, user_input: Any, **kwargs: Any) -> Agent
                     break  # günlük/uzun limit → sıradaki modele geç
                 if _is_provider_glitch(exc):
                     break  # modelin geçici hatası → sıradaki modele geç
+                if _is_access_blocked(exc):
+                    break  # kredi/bakiye/yetki engeli → sıradaki modele geç
                 raise  # gerçek hata → yükselt
 
     raise RuntimeError(

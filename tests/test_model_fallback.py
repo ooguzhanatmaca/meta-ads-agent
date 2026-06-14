@@ -122,6 +122,37 @@ def test_provider_glitch_detected() -> None:
     assert not mf._is_provider_glitch(Exception("some unrelated error"))
 
 
+def test_access_blocked_detects_no_credit_and_auth() -> None:
+    assert mf._is_access_blocked(Exception("Your credit balance is too low"))
+    assert mf._is_access_blocked(Exception("please go to Plans & Billing"))
+    assert mf._is_access_blocked(Exception("AuthenticationError 401"))
+    assert not mf._is_access_blocked(Exception("some unrelated error"))
+
+
+def test_no_credit_balance_falls_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Claude birincil ama bakiyesi yok -> agent çökmeden OpenAI'a düşmeli.
+    monkeypatch.setenv("PRIMARY_MODEL", "anthropic/claude-sonnet-4-6")
+    monkeypatch.setenv("FALLBACK_MODEL", "openai")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    mf._model_cache.clear()
+
+    ok = MagicMock(final_output="OpenAI yanıtı")
+
+    async def fake_run(agent, user_input, **kwargs):
+        if "run_config" in kwargs:  # anthropic çağrısı: kredi yok
+            raise Exception(
+                "litellm.BadRequestError: AnthropicException - "
+                "Your credit balance is too low to access the Anthropic API."
+            )
+        return ok
+
+    with patch.object(mf.Runner, "run", side_effect=fake_run):
+        run = asyncio.run(mf.run_with_fallback("AGENT", "merhaba"))
+
+    assert run.provider == "openai"
+    assert run.result is ok
+
+
 def test_provider_glitch_falls_through(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PRIMARY_MODEL", "groq/llama-3.3-70b-versatile")
     monkeypatch.setenv("FALLBACK_MODEL", "openai")
