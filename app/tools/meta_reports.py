@@ -18,6 +18,7 @@ from app.meta.client import (
     get_custom_audiences,
     get_performance_report,
     get_pixels,
+    search_interests,
     test_meta_connection,
 )
 from app.meta.compare_periods import build_period_comparison
@@ -459,6 +460,50 @@ def _account_pixel_summary(pixels: list[dict[str, Any]]) -> str:
     for pixel in pixels:
         lines.append(f"  - PIXEL_ID={pixel.get('id')} (ad: {pixel.get('name')})")
     return "\n".join(lines)
+
+
+def _interest_size(item: dict[str, Any]) -> int:
+    """Best-effort audience size across Meta API versions."""
+    for key in ("audience_size_lower_bound", "audience_size"):
+        value = item.get(key)
+        if value:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                pass
+    return 0
+
+
+def _format_interests(items: list[dict[str, Any]]) -> str:
+    """Format interest search matches for the agent to pick IDs from."""
+    if not items:
+        return "Eşleşen ilgi alanı bulunamadı. Farklı bir terim deneyin."
+    lines = ["İlgi alanı eşleşmeleri (id — ad — yaklaşık kitle):"]
+    for item in items[:10]:
+        size = _interest_size(item)
+        lines.append(f"  - {item.get('id')} — {item.get('name')} (~{size:,} kişi)")
+    lines.append(
+        "Uygun olanların id'lerini create_ad_set_tool'a interest_ids olarak ver."
+    )
+    return "\n".join(lines)
+
+
+@function_tool
+def search_ad_interests(query: str) -> str:
+    """Bir ilgi alanı adını Meta ilgi alanı ID'lerine çevirir (hedefleme için).
+
+    Kullanıcı bir ilgi alanı/konu söylediğinde (ör. "streetwear", "fitness",
+    "oversize giyim") önce bunu çağır. Eşleşmeleri (id + ad + yaklaşık kitle
+    büyüklüğü) döndürür; en uygun olan(lar)ı seçip kullanıcıya doğrula, sonra
+    seçilen id'leri create_ad_set_tool'a interest_ids olarak ver.
+
+    Args:
+        query: Aranacak ilgi alanı/konu adı (Türkçe veya İngilizce).
+    """
+    try:
+        return _format_interests(search_interests(query))
+    except MetaAPIError as error:
+        return f"İlgi alanı araması başarısız: {error}"
 
 
 @function_tool

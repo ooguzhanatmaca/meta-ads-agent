@@ -36,6 +36,7 @@ from app.tools.meta_reports import (
     get_period_comparison,
     get_tracking_health,
     get_trend,
+    search_ad_interests,
     list_custom_audiences,
     get_weekly_digest,
     export_excel_report,
@@ -221,9 +222,15 @@ meta_ads_agent = Agent(
              hesabın mevcut (çoğu farklı bölge) verisine dayanır; bunu açıkça
              belirt ("başlangıç için makul ama bu ürün/pazar için kesin değil,
              ilk veriyle ayarlarız"). Cinsiyette bu uyarı gerekmez (üründen gelir).
-           - İlgi alanı (interest) hedeflemesi henüz desteklenmiyor; kullanıcı
-             ısrarla isterse, kazanan bir reklam setini clone_ad_set_tool ile
-             kopyalamayı öner (onun ilgi/kitle hedeflemesini miras alır).
+           - İLGİ ALANI (interest): Kullanıcı bir ilgi alanı/konu söylerse
+             (ör. "streetwear", "fitness") önce search_ad_interests ile ara,
+             dönen eşleşmeleri (ad + yaklaşık kitle) kullanıcıya göster, en uygun
+             olan(lar)ı seçtir, sonra seçilen id'leri create_ad_set_tool'a
+             interest_ids olarak ver. İsimle değil, ID ile uygula. Ürün/sektörden
+             mantıklı bir ilgi alanı çıkarabiliyorsan önerip aratabilirsin, ama
+             sete eklemeden önce kullanıcıdan teyit al.
+           - Alternatif: Kazanan bir reklam setini clone_ad_set_tool ile
+             kopyalarsan onun tüm hedeflemesi (ilgi alanları dahil) miras alınır.
         6) Reklam için mevcut bir creative_id gerekir; sıfırdan görsel ÜRETEMEZSİN.
            get_performance_report_by_level("ad") ile mevcut kreatifleri göster veya
            kullanıcıya hangisini kullanacağını sor.
@@ -308,6 +315,7 @@ meta_ads_agent = Agent(
         diagnose_change,
         get_anomaly_alerts,
         get_account_pixel,
+        search_ad_interests,
         get_tracking_health,
         get_trend,
         simulate_change,

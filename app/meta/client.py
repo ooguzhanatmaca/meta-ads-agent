@@ -387,6 +387,7 @@ class MetaClient:
         age_min: int = 18,
         age_max: int = 65,
         genders: tuple[int, ...] | None = None,
+        interests: tuple[dict[str, Any], ...] | None = None,
         status: str = "PAUSED",
         pixel_id: str | None = None,
         custom_event_type: str | None = None,
@@ -394,6 +395,8 @@ class MetaClient:
         """Create a PAUSED ad set under a campaign with basic targeting.
 
         ``genders``: Meta cinsiyet kodları — (1,) erkek, (2,) kadın; None = tümü.
+        ``interests``: hedeflenecek ilgi alanları — her biri {"id", "name"};
+            search_interests'ten alınır.
         """
         url = (
             f"https://graph.facebook.com/{self.graph_api_version}/"
@@ -406,6 +409,8 @@ class MetaClient:
         }
         if genders:
             targeting["genders"] = list(genders)
+        if interests:
+            targeting["flexible_spec"] = [{"interests": list(interests)}]
         data: dict[str, Any] = {
             "name": name,
             "campaign_id": campaign_id,
@@ -479,6 +484,19 @@ class MetaClient:
         """Read selected fields of any entity (campaign/ad set/ad) for previews."""
         url = f"https://graph.facebook.com/{self.graph_api_version}/{entity_id}"
         return self._get(url, {"fields": fields})
+
+    def search_interests(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Search Meta ad interests by name → list of {id, name, audience_size}."""
+        url = f"https://graph.facebook.com/{self.graph_api_version}/search"
+        payload = self._get(
+            url, {"type": "adinterest", "q": query, "limit": str(limit)}
+        )
+        data = payload.get("data")
+        if not isinstance(data, list) or not all(
+            isinstance(item, dict) for item in data
+        ):
+            raise MetaResponseError("Meta API ilgi alanı verisi beklenen biçimde değil.")
+        return data
 
     def create_lookalike_audience(
         self,
@@ -669,6 +687,7 @@ def create_ad_set(
     age_min: int = 18,
     age_max: int = 65,
     genders: tuple[int, ...] | None = None,
+    interests: tuple[dict[str, Any], ...] | None = None,
     pixel_id: str | None = None,
     custom_event_type: str | None = None,
 ) -> dict[str, Any]:
@@ -682,6 +701,7 @@ def create_ad_set(
         age_min=age_min,
         age_max=age_max,
         genders=genders,
+        interests=interests,
         pixel_id=pixel_id,
         custom_event_type=custom_event_type,
     )
@@ -724,6 +744,11 @@ def get_pixel_stats(pixel_id: str, start_time: str) -> list[dict[str, Any]]:
 def get_entity(entity_id: str, fields: str) -> dict[str, Any]:
     """Read selected fields of any entity (for write previews)."""
     return MetaClient.from_env().get_entity(entity_id, fields)
+
+
+def search_interests(query: str, limit: int = 10) -> list[dict[str, Any]]:
+    """Search Meta ad interests by name for the configured account."""
+    return MetaClient.from_env().search_interests(query, limit)
 
 
 def clone_ad_set(

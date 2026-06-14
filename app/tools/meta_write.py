@@ -115,6 +115,12 @@ def _genders_from(gender: str) -> tuple[tuple[int, ...] | None, str]:
     return None, "tümü"
 
 
+def _parse_interest_ids(interest_ids: str) -> tuple[dict[str, str], ...]:
+    """Virgülle ayrılmış ilgi alanı ID'lerini targeting biçimine çevir."""
+    ids = [part.strip() for part in (interest_ids or "").split(",") if part.strip()]
+    return tuple({"id": i} for i in ids)
+
+
 def _create_ad_set(
     campaign_id: str,
     name: str,
@@ -124,6 +130,7 @@ def _create_ad_set(
     age_min: int = 18,
     age_max: int = 65,
     gender: str = "all",
+    interest_ids: str = "",
     pixel_id: str = "",
     custom_event_type: str = "",
 ) -> str:
@@ -132,6 +139,7 @@ def _create_ad_set(
     if optimization_goal not in VALID_OPTIMIZATION_GOALS:
         return f"Geçersiz optimizasyon hedefi. Geçerli: {', '.join(sorted(VALID_OPTIMIZATION_GOALS))}."
     genders, gender_label = _genders_from(gender)
+    interests = _parse_interest_ids(interest_ids)
     minor = int(round(float(daily_budget_try) * 100))
     try:
         result = create_ad_set(
@@ -143,15 +151,17 @@ def _create_ad_set(
             age_min=age_min,
             age_max=age_max,
             genders=genders,
+            interests=interests or None,
             pixel_id=pixel_id or None,
             custom_event_type=custom_event_type or None,
         )
     except MetaAPIError as error:
         return f"Reklam seti oluşturulamadı: {error}"
+    interest_note = f", {len(interests)} ilgi alanı" if interests else ""
     return (
         f"Reklam seti DURAKLATILMIŞ olarak oluşturuldu (id: {result.get('id')}). "
         f"Günlük bütçe {daily_budget_try:.2f} TL, hedef ülke {country}, "
-        f"yaş {age_min}-{age_max}, cinsiyet {gender_label}."
+        f"yaş {age_min}-{age_max}, cinsiyet {gender_label}{interest_note}."
     )
 
 
@@ -305,6 +315,7 @@ def create_ad_set_tool(
     age_min: int = 18,
     age_max: int = 65,
     gender: str = "all",
+    interest_ids: str = "",
     pixel_id: str = "",
     custom_event_type: str = "",
 ) -> str:
@@ -324,12 +335,15 @@ def create_ad_set_tool(
         age_max: Maksimum yaş.
         gender: Cinsiyet hedefleme: "erkek", "kadın" veya "all" (tümü, varsayılan).
             Ürün belirgin bir cinsiyete yönelikse (ör. erkek tişört) onu ver.
+        interest_ids: İlgi alanı hedefleme — virgülle ayrılmış Meta ilgi alanı
+            ID'leri (ör. "6003150119230,6003299417538"). ID'leri önce
+            search_ad_interests ile bul; isimle değil, ID ile ver.
         pixel_id: Dönüşüm optimizasyonu için pixel ID (opsiyonel).
         custom_event_type: pixel ile birlikte olay türü (ör. PURCHASE).
     """
     return _create_ad_set(
         campaign_id, name, daily_budget_try, optimization_goal, country,
-        age_min, age_max, gender, pixel_id, custom_event_type,
+        age_min, age_max, gender, interest_ids, pixel_id, custom_event_type,
     )
 
 

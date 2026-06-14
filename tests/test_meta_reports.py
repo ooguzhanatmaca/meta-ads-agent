@@ -6,7 +6,21 @@ from app.meta.ad_report import main as ad_main
 from app.meta.adset_report import main as adset_main
 from app.meta.campaign_report import main as campaign_main
 from app.meta.performance_report import calculate_report_rows, format_report
-from app.tools.meta_reports import _account_pixel_summary
+from app.tools.meta_reports import _account_pixel_summary, _format_interests
+
+
+def test_format_interests_lists_id_name_size() -> None:
+    out = _format_interests([
+        {"id": "6003", "name": "Streetwear", "audience_size_lower_bound": 1327284},
+        {"id": "6004", "name": "Sokak giyim", "audience_size": 100994436},
+    ])
+    assert "6003 — Streetwear" in out
+    assert "1,327,284" in out
+    assert "interest_ids" in out
+
+
+def test_format_interests_empty() -> None:
+    assert "bulunamadı" in _format_interests([])
 
 
 def test_account_pixel_summary_single_gives_id_and_tells_not_to_ask() -> None:

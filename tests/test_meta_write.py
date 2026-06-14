@@ -174,6 +174,40 @@ def test_genders_from_mapping() -> None:
     assert mw._genders_from("") == (None, "tümü")
 
 
+def test_parse_interest_ids() -> None:
+    assert mw._parse_interest_ids("6003, 6004 ,, 6005") == (
+        {"id": "6003"}, {"id": "6004"}, {"id": "6005"},
+    )
+    assert mw._parse_interest_ids("") == ()
+
+
+def test_ad_set_passes_interests(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    calls = {}
+
+    def fake_create_ad_set(campaign_id, name, minor, **kwargs):
+        calls.update(kwargs=kwargs)
+        return {"id": "1"}
+
+    with patch.object(mw, "create_ad_set", side_effect=fake_create_ad_set):
+        out = mw._create_ad_set("c", "Set", 300, interest_ids="6003150119230,6003299417538")
+    assert calls["kwargs"]["interests"] == ({"id": "6003150119230"}, {"id": "6003299417538"})
+    assert "2 ilgi alanı" in out
+
+
+def test_ad_set_no_interests_passes_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    calls = {}
+
+    def fake_create_ad_set(campaign_id, name, minor, **kwargs):
+        calls.update(kwargs=kwargs)
+        return {"id": "1"}
+
+    with patch.object(mw, "create_ad_set", side_effect=fake_create_ad_set):
+        mw._create_ad_set("c", "Set", 300)
+    assert calls["kwargs"]["interests"] is None
+
+
 def test_ad_set_invalid_goal_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
     with patch.object(mw, "create_ad_set") as create:
