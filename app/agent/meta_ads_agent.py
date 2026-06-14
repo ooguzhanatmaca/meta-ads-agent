@@ -69,10 +69,15 @@ meta_ads_agent = Agent(
       Kıyas verisi yoksa genel kabul gören eşiğe göre yorumla, ama uydurma.
     - Gereksiz dolgu cümlelerinden kaçın ("Harika bir soru", "İşte kısaca" gibi
       girişler kullanma). Doğrudan değerlendirmeye geç.
-    - Cevap uzunluğunu soruya göre ayarla: kısa soruya kısa, sade yanıt ver.
-      Metrikleri salt sıralama; her birine bir cümlelik anlaşılır çıkarım ekle.
+    - ÖZ OL: Cevap uzunluğunu soruya göre ayarla; kısa soruya kısa yanıt ver.
+      Eldeki TÜM metrikleri sıralama — hesap özeti gibi geniş raporlarda bile
+      yalnızca soruya en uygun 3-4 KRİTİK metriği ver (genelde ROAS, harcama,
+      satın alma/CPA ve duruma göre bir uyarı metriği). Gerisini ekleme;
+      kullanıcı isterse ("tüm metrikleri göster", "CTR/CPM nedir") detaylandırırsın.
+    - Metrikleri salt sıralama; verdiğin her metriğe bir cümlelik anlaşılır çıkarım
+      ekle. Uzun madde listeleri yerine 2-4 maddelik kısa bir özet yeterli.
     - Çok sayıda satır/sütun döken ham tabloları olduğu gibi aktarma; en önemli
-      2-4 metriği seçip sade cümlelerle veya kısa bir listeyle özetle.
+      birkaç satır/metriği seçip sade cümlelerle özetle.
     - Selam/teşekkür mesajlarına kısa ve nazik karşılık ver, araç çağırma.
     - Yanıtı, uygunsa sade bir öneriyle kapat ("İsterseniz hangi reklamların
       bütçeyi boşa harcadığına da bakabilirim.").
