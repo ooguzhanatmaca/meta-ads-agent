@@ -145,7 +145,33 @@ def test_ad_set_creates_paused_with_budget_conversion(monkeypatch: pytest.Monkey
     assert calls["campaign_id"] == "12090"
     assert calls["minor"] == 30000  # 300 TL -> 30000 kuruş
     assert calls["kwargs"]["age_min"] == 25
+    assert calls["kwargs"]["genders"] is None  # cinsiyet verilmezse tümü
     assert "DURAKLATILMIŞ" in out and "23800" in out
+
+
+def test_ad_set_maps_gender_to_meta_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    calls = {}
+
+    def fake_create_ad_set(campaign_id, name, minor, **kwargs):
+        calls.update(kwargs=kwargs)
+        return {"id": "1"}
+
+    with patch.object(mw, "create_ad_set", side_effect=fake_create_ad_set):
+        out_m = mw._create_ad_set("c", "Erkek Set", 300, gender="erkek")
+    assert calls["kwargs"]["genders"] == (1,)  # erkek -> 1
+    assert "cinsiyet erkek" in out_m
+
+    with patch.object(mw, "create_ad_set", side_effect=fake_create_ad_set):
+        mw._create_ad_set("c", "Kadın Set", 300, gender="female")
+    assert calls["kwargs"]["genders"] == (2,)  # female -> 2
+
+
+def test_genders_from_mapping() -> None:
+    assert mw._genders_from("erkek") == ((1,), "erkek")
+    assert mw._genders_from("KADIN") == ((2,), "kadın")
+    assert mw._genders_from("all") == (None, "tümü")
+    assert mw._genders_from("") == (None, "tümü")
 
 
 def test_ad_set_invalid_goal_rejected(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -386,20 +386,26 @@ class MetaClient:
         countries: tuple[str, ...] = ("TR",),
         age_min: int = 18,
         age_max: int = 65,
+        genders: tuple[int, ...] | None = None,
         status: str = "PAUSED",
         pixel_id: str | None = None,
         custom_event_type: str | None = None,
     ) -> dict[str, Any]:
-        """Create a PAUSED ad set under a campaign with basic targeting."""
+        """Create a PAUSED ad set under a campaign with basic targeting.
+
+        ``genders``: Meta cinsiyet kodları — (1,) erkek, (2,) kadın; None = tümü.
+        """
         url = (
             f"https://graph.facebook.com/{self.graph_api_version}/"
             f"{self.ad_account_id}/adsets"
         )
-        targeting = {
+        targeting: dict[str, Any] = {
             "geo_locations": {"countries": list(countries)},
             "age_min": age_min,
             "age_max": age_max,
         }
+        if genders:
+            targeting["genders"] = list(genders)
         data: dict[str, Any] = {
             "name": name,
             "campaign_id": campaign_id,
@@ -662,6 +668,7 @@ def create_ad_set(
     countries: tuple[str, ...] = ("TR",),
     age_min: int = 18,
     age_max: int = 65,
+    genders: tuple[int, ...] | None = None,
     pixel_id: str | None = None,
     custom_event_type: str | None = None,
 ) -> dict[str, Any]:
@@ -674,6 +681,7 @@ def create_ad_set(
         countries=countries,
         age_min=age_min,
         age_max=age_max,
+        genders=genders,
         pixel_id=pixel_id,
         custom_event_type=custom_event_type,
     )

@@ -101,6 +101,20 @@ VALID_OPTIMIZATION_GOALS = {
 }
 
 
+_MALE_WORDS = {"erkek", "male", "m", "man", "erkekler"}
+_FEMALE_WORDS = {"kadın", "kadin", "female", "f", "woman", "kadınlar", "kadinlar"}
+
+
+def _genders_from(gender: str) -> tuple[tuple[int, ...] | None, str]:
+    """Map a free-text gender to Meta codes. Returns (genders, human_label)."""
+    value = (gender or "").strip().lower()
+    if value in _MALE_WORDS:
+        return (1,), "erkek"
+    if value in _FEMALE_WORDS:
+        return (2,), "kadın"
+    return None, "tümü"
+
+
 def _create_ad_set(
     campaign_id: str,
     name: str,
@@ -109,6 +123,7 @@ def _create_ad_set(
     country: str = "TR",
     age_min: int = 18,
     age_max: int = 65,
+    gender: str = "all",
     pixel_id: str = "",
     custom_event_type: str = "",
 ) -> str:
@@ -116,6 +131,7 @@ def _create_ad_set(
         return DISABLED_MESSAGE
     if optimization_goal not in VALID_OPTIMIZATION_GOALS:
         return f"Geçersiz optimizasyon hedefi. Geçerli: {', '.join(sorted(VALID_OPTIMIZATION_GOALS))}."
+    genders, gender_label = _genders_from(gender)
     minor = int(round(float(daily_budget_try) * 100))
     try:
         result = create_ad_set(
@@ -126,6 +142,7 @@ def _create_ad_set(
             countries=(country,),
             age_min=age_min,
             age_max=age_max,
+            genders=genders,
             pixel_id=pixel_id or None,
             custom_event_type=custom_event_type or None,
         )
@@ -133,7 +150,8 @@ def _create_ad_set(
         return f"Reklam seti oluşturulamadı: {error}"
     return (
         f"Reklam seti DURAKLATILMIŞ olarak oluşturuldu (id: {result.get('id')}). "
-        f"Günlük bütçe {daily_budget_try:.2f} TL, hedef ülke {country}, yaş {age_min}-{age_max}."
+        f"Günlük bütçe {daily_budget_try:.2f} TL, hedef ülke {country}, "
+        f"yaş {age_min}-{age_max}, cinsiyet {gender_label}."
     )
 
 
@@ -286,6 +304,7 @@ def create_ad_set_tool(
     country: str = "TR",
     age_min: int = 18,
     age_max: int = 65,
+    gender: str = "all",
     pixel_id: str = "",
     custom_event_type: str = "",
 ) -> str:
@@ -303,12 +322,14 @@ def create_ad_set_tool(
         country: Hedef ülke kodu (ör. TR).
         age_min: Minimum yaş.
         age_max: Maksimum yaş.
+        gender: Cinsiyet hedefleme: "erkek", "kadın" veya "all" (tümü, varsayılan).
+            Ürün belirgin bir cinsiyete yönelikse (ör. erkek tişört) onu ver.
         pixel_id: Dönüşüm optimizasyonu için pixel ID (opsiyonel).
         custom_event_type: pixel ile birlikte olay türü (ör. PURCHASE).
     """
     return _create_ad_set(
         campaign_id, name, daily_budget_try, optimization_goal, country,
-        age_min, age_max, pixel_id, custom_event_type,
+        age_min, age_max, gender, pixel_id, custom_event_type,
     )
 
 

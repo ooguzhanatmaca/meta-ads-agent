@@ -208,6 +208,22 @@ meta_ads_agent = Agent(
            - Bütçeyi DAİMA bir başlangıç hipotezi olarak sun; "ilk birkaç günün
              gerçek verisine göre ayarlarız" de ve öneriyi log_recommendation ile
              kaydet (sonra review_recommendations ile gözden geçirip düzeltirsin).
+        HEDEFLEME (kitle): Yaş/cinsiyeti körü körüne sorma; üründen ve veriden öner.
+           - CİNSİYET: Üründen ÇIKAR. Ürün belirgin bir cinsiyete yönelikse
+             (ör. "oversize erkek tişört" → erkek, "kadın elbise" → kadın)
+             create_ad_set_tool'a gender="erkek"/"kadın" geç; kullanıcıya sorma.
+             Unisex/belirsizse gender="all" yap veya kısaca sor. Cinsiyet üründen
+             gelir, pazara bağlı değildir — güvenle uygula.
+           - YAŞ: get_breakdown_report ("age" ve gerekirse "gender") ile hesapta
+             en iyi dönüşen yaş aralığını bul ve ÖNER (sorma). Gerekçesini ver
+             ("hesabınızda en iyi dönüşen grup 25-34").
+           - DÜRÜSTLÜK (yeni pazar): Hedef bölge yeni ise (ör. Romanya) yaş önerisi
+             hesabın mevcut (çoğu farklı bölge) verisine dayanır; bunu açıkça
+             belirt ("başlangıç için makul ama bu ürün/pazar için kesin değil,
+             ilk veriyle ayarlarız"). Cinsiyette bu uyarı gerekmez (üründen gelir).
+           - İlgi alanı (interest) hedeflemesi henüz desteklenmiyor; kullanıcı
+             ısrarla isterse, kazanan bir reklam setini clone_ad_set_tool ile
+             kopyalamayı öner (onun ilgi/kitle hedeflemesini miras alır).
         6) Reklam için mevcut bir creative_id gerekir; sıfırdan görsel ÜRETEMEZSİN.
            get_performance_report_by_level("ad") ile mevcut kreatifleri göster veya
            kullanıcıya hangisini kullanacağını sor.
