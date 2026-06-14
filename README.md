@@ -16,7 +16,7 @@ bütçe önerileri, anomali tespiti, trend takibi ve raporlama yapar.
 
 ## Özellikler
 
-Agent sohbet içinde 33 araç kullanır (20 analiz + 8 operatör + 5 hafıza/takip).
+Agent sohbet içinde 34 araç kullanır (21 analiz + 8 operatör + 5 hafıza/takip).
 
 ### Analiz araçları
 
@@ -33,6 +33,7 @@ Agent sohbet içinde 33 araç kullanır (20 analiz + 8 operatör + 5 hafıza/tak
 | **Bütçe önerileri** | Sayısal öneriler (önerilen günlük bütçe dahil) |
 | **Demografik kırılım** | Yaş / cinsiyet / yerleşim / platform / ülke / cihaz |
 | **Anomali uyarıları** | CPA artışı, ROAS düşüşü, satışsız harcama, kreatif yorgunluğu |
+| **İzleme sağlığı** | Piksel/dönüşüm denetimi: olay hunisi, tazelik, "satın alma ölçülmüyor" gibi kritik sorunlar |
 | **Trend** | Günlük trend + mini grafik (sparkline) ve yorum |
 | **Senaryo (what-if)** | "Bütçeyi %X artırsam / kapatsam ne olur" tahmini |
 | **Haftalık özet** | Bu hafta vs geçen hafta + en iyi/kötü reklamlar + uyarılar |
@@ -173,6 +174,9 @@ Güvenlik garantileri:
   çalışmaz; çağrılırsa "yazma işlemleri kapalı" yanıtı döner.
 - **Açık onay:** Agent bir yazma aracını çağırmadan önce ne yapacağını özetler ve
   sizden onay ister. Onay vermeden işlem yapılmaz.
+- **Dry-run önizlemesi:** Harcamayı/durumu değiştiren işlemlerde (bütçe, aktifleştir,
+  durdur) agent önce hiçbir şeyi değiştirmeden gerçek veriyle bir önizleme gösterir
+  (ör. "günlük bütçe 700 TL → 3.000 TL, %+329"), onayınızı alır, sonra uygular.
 - **Hep duraklatılmış:** Oluşturulan kampanya/set/reklam DURAKLATILMIŞ gelir —
   siz Ads Manager'dan yayına almadıkça harcama başlamaz.
 - **İzin:** Meta erişim token'ınız `ads_management` iznine sahip olmalıdır.

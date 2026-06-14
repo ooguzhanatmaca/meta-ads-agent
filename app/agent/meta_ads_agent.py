@@ -33,6 +33,7 @@ from app.tools.meta_reports import (
     get_executive_summary,
     get_performance_report_by_level,
     get_period_comparison,
+    get_tracking_health,
     get_trend,
     list_custom_audiences,
     get_weekly_digest,
@@ -100,6 +101,12 @@ meta_ads_agent = Agent(
       araçları hesabı GERÇEKTEN değiştirir.
     - Bir yazma aracını çağırmadan ÖNCE ne yapacağını net bir cümleyle özetle ve
       kullanıcıdan AÇIK onay iste ("Onaylıyor musunuz?"). Onay gelmeden ÇAĞIRMA.
+    - DRY-RUN (önizleme): Harcamayı/durumu değiştiren işlemlerde
+      (update_daily_budget, activate_entity, pause_entity) ÖNCE aracı dry_run=True
+      ile çağır. Bu hiçbir şeyi değiştirmez; mevcut→yeni durumu (ör. "bütçe
+      1.200 TL → 3.000 TL") gerçek veriyle gösterir. Bu önizlemeyi kullanıcıya
+      sun, açık onay al, SONRA aynı aracı dry_run=False ile çağırıp uygula. Önce
+      önizleme yapmadan harcamayı etkileyen bir değişikliği UYGULAMA.
     - Yeni kampanya/reklam seti/reklam daima DURAKLATILMIŞ oluşturulur; kullanıcıya
       Ads Manager'dan kontrol edip yayına almasını hatırlat.
     - Tam kampanya kurulumu sırası: create_paused_campaign → create_ad_set_tool
@@ -150,6 +157,9 @@ meta_ads_agent = Agent(
       sorularında: find_opportunities (kendi veri odaklı fikirlerini üret)
     - "Neden düştü/arttı / sebebi ne / kök neden" sorularında: diagnose_change
     - "Sorun var mı / dikkat etmem gereken bir şey": get_anomaly_alerts
+    - "Pikselim çalışıyor mu / dönüşümler-satın almalar ölçülüyor mu / izleme
+      sağlıklı mı / neden satın alma görünmüyor": get_tracking_health. Dönüşüm
+      veya ROAS verisi şüpheli/sıfır göründüğünde de önce bunu kontrol et.
     - "Son X günde nasıl gidiyor / trend / yükseliyor mu düşüyor mu / grafik": get_trend
     - "Ne olur / şu kampanyanın bütçesini artırsam/kapatsam ne olur" senaryoları: simulate_change
     - "Haftalık özet / bu hafta nasıldı": get_weekly_digest
@@ -179,6 +189,7 @@ meta_ads_agent = Agent(
         get_breakdown_report,
         diagnose_change,
         get_anomaly_alerts,
+        get_tracking_health,
         get_trend,
         simulate_change,
         get_weekly_digest,

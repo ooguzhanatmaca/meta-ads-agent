@@ -20,6 +20,7 @@ from app.meta.client import (
     create_ad_set,
     create_campaign,
     create_lookalike_audience,
+    get_entity,
     set_daily_budget,
     set_entity_status,
 )
@@ -48,6 +49,31 @@ def _writes_enabled() -> bool:
         "yes",
         "evet",
     }
+
+
+PREVIEW_PREFIX = "ÖNİZLEME (henüz uygulanmadı):"
+
+
+def _entity_snapshot(entity_id: str) -> dict[str, object]:
+    """Read an entity's current name/status/daily budget for a change preview.
+
+    Returns an empty dict on any read failure — the preview still shows the
+    intended new value, just without the current one.
+    """
+    try:
+        data = get_entity(entity_id, "name,status,daily_budget")
+    except MetaAPIError:
+        return {}
+    snapshot: dict[str, object] = {
+        "name": data.get("name"),
+        "status": data.get("status"),
+    }
+    if data.get("daily_budget") is not None:
+        try:
+            snapshot["daily_budget_try"] = int(data["daily_budget"]) / 100
+        except (TypeError, ValueError):
+            pass
+    return snapshot
 
 
 def _create_paused_campaign(name: str, objective: str = "OUTCOME_TRAFFIC") -> str:
@@ -167,7 +193,14 @@ def _create_ad(adset_id: str, name: str, creative_id: str) -> str:
     )
 
 
-def _pause_entity(entity_id: str) -> str:
+def _pause_entity(entity_id: str, dry_run: bool = False) -> str:
+    if dry_run:
+        snap = _entity_snapshot(entity_id)
+        label = f"'{snap['name']}' ({entity_id})" if snap.get("name") else entity_id
+        return (
+            f"{PREVIEW_PREFIX} {label} DURAKLATILACAK; harcaması duracak. "
+            "Onaylarsanız uygularım."
+        )
     if not _writes_enabled():
         return DISABLED_MESSAGE
     try:
@@ -177,7 +210,20 @@ def _pause_entity(entity_id: str) -> str:
     return f"{entity_id} duraklatıldı (harcama durdu)."
 
 
-def _activate_entity(entity_id: str) -> str:
+def _activate_entity(entity_id: str, dry_run: bool = False) -> str:
+    if dry_run:
+        snap = _entity_snapshot(entity_id)
+        label = f"'{snap['name']}' ({entity_id})" if snap.get("name") else entity_id
+        budget = snap.get("daily_budget_try")
+        spend_note = (
+            f"günlük yaklaşık {budget:.2f} TL harcama başlayabilir"
+            if isinstance(budget, (int, float))
+            else "harcama başlayabilir"
+        )
+        return (
+            f"{PREVIEW_PREFIX} {label} YAYINA ALINACAK; {spend_note}. "
+            "Onaylarsanız uygularım."
+        )
     if not _writes_enabled():
         return DISABLED_MESSAGE
     try:
@@ -187,7 +233,25 @@ def _activate_entity(entity_id: str) -> str:
     return f"{entity_id} aktifleştirildi (yayında — harcama başlayabilir)."
 
 
-def _update_daily_budget(entity_id: str, daily_budget_try: float) -> str:
+def _update_daily_budget(
+    entity_id: str, daily_budget_try: float, dry_run: bool = False
+) -> str:
+    if dry_run:
+        snap = _entity_snapshot(entity_id)
+        label = f"'{snap['name']}' ({entity_id})" if snap.get("name") else entity_id
+        current = snap.get("daily_budget_try")
+        if isinstance(current, (int, float)) and current > 0:
+            pct = (daily_budget_try - current) / current * 100
+            change = (
+                f"{current:.2f} TL → {daily_budget_try:.2f} TL "
+                f"(%{pct:+.0f})"
+            )
+        else:
+            change = f"yeni günlük bütçe {daily_budget_try:.2f} TL"
+        return (
+            f"{PREVIEW_PREFIX} {label} günlük bütçesi {change} olarak değişecek. "
+            "Onaylarsanız uygularım."
+        )
     if not _writes_enabled():
         return DISABLED_MESSAGE
     minor = int(round(float(daily_budget_try) * 100))  # TL -> kuruş
@@ -309,37 +373,46 @@ def create_ad_tool(adset_id: str, name: str, creative_id: str) -> str:
 
 
 @function_tool
-def pause_entity(entity_id: str) -> str:
+def pause_entity(entity_id: str, dry_run: bool = False) -> str:
     """Bir kampanya/reklam seti/reklamı durdurur (PAUSED). Harcamayı durdurur (güvenli).
 
     Yalnızca kullanıcının açık onayından sonra çağır.
 
     Args:
         entity_id: Durdurulacak varlığın ID'si.
+        dry_run: True ise hiçbir şeyi değiştirmez; yalnızca ne olacağını önizler.
     """
-    return _pause_entity(entity_id)
+    return _pause_entity(entity_id, dry_run)
 
 
 @function_tool
-def activate_entity(entity_id: str) -> str:
+def activate_entity(entity_id: str, dry_run: bool = False) -> str:
     """Bir kampanya/reklam seti/reklamı yayına alır (ACTIVE).
 
-    DİKKAT: Bu işlem HARCAMA BAŞLATIR. Yalnızca kullanıcının çok net onayıyla çağır.
+    DİKKAT: Bu işlem HARCAMA BAŞLATIR. ÖNCE dry_run=True ile önizleme yap, hangi
+    varlığın yayına alınacağını ve harcama etkisini kullanıcıya göster, açık onay
+    al; SONRA dry_run=False ile uygula.
 
     Args:
         entity_id: Aktifleştirilecek varlığın ID'si.
+        dry_run: True ise hiçbir şeyi değiştirmez; yalnızca ne olacağını önizler.
     """
-    return _activate_entity(entity_id)
+    return _activate_entity(entity_id, dry_run)
 
 
 @function_tool
-def update_daily_budget(entity_id: str, daily_budget_try: float) -> str:
+def update_daily_budget(
+    entity_id: str, daily_budget_try: float, dry_run: bool = False
+) -> str:
     """Bir kampanya/reklam setinin günlük bütçesini günceller (TL).
 
-    DİKKAT: Harcamayı doğrudan etkiler. Yalnızca kullanıcının açık onayıyla çağır.
+    DİKKAT: Harcamayı doğrudan etkiler. ÖNCE dry_run=True ile önizleme yap; mevcut
+    bütçe → yeni bütçe değişimini kullanıcıya göster, açık onay al; SONRA
+    dry_run=False ile uygula.
 
     Args:
         entity_id: Bütçesi değişecek varlığın ID'si.
         daily_budget_try: Yeni günlük bütçe (TL cinsinden, ör. 500).
+        dry_run: True ise hiçbir şeyi değiştirmez; mevcut→yeni bütçeyi önizler.
     """
-    return _update_daily_budget(entity_id, daily_budget_try)
+    return _update_daily_budget(entity_id, daily_budget_try, dry_run)

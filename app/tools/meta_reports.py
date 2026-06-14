@@ -26,6 +26,7 @@ from app.meta.executive_summary import build_executive_summary
 from app.meta.opportunities import build_opportunities
 from app.meta.export_excel import export_excel
 from app.meta.simulation import build_simulation
+from app.meta.tracking_health import build_tracking_health
 from app.meta.weekly_digest import build_weekly_digest
 from app.meta.performance_report import calculate_report_rows, format_report
 from app.meta.recommendations import format_recommendations
@@ -436,6 +437,23 @@ def get_anomaly_alerts() -> str:
         return build_anomaly_report()
     except MetaAPIError as error:
         return f"Uyarılar oluşturulamadı: {error}"
+
+
+@function_tool
+def get_tracking_health() -> str:
+    """İzleme/dönüşüm kurulumunun (piksel) sağlığını denetler.
+
+    "Pikselim çalışıyor mu", "dönüşümler/satın almalar ölçülüyor mu", "izleme
+    sağlıklı mı", "neden satın alma görünmüyor" gibi sorularda kullan. Pikselin
+    son ne zaman veri gönderdiğini, olay hunisini (PageView→...→Purchase) ve
+    kritik sorunları (satın alma olayı gelmiyor, piksel sessiz, huni kopuk)
+    döndürür. Tüm performans önerilerinin güvenilirliği bu izlemeye dayandığı
+    için, dönüşüm/ROAS verisi şüpheli göründüğünde de bunu öner.
+    """
+    try:
+        return build_tracking_health()
+    except MetaAPIError as error:
+        return f"İzleme sağlığı denetlenemedi: {error}"
 
 
 @function_tool

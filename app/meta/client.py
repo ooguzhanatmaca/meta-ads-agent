@@ -441,6 +441,39 @@ class MetaClient:
             raise MetaResponseError("Meta API kitle verisi beklenen biçimde değil.")
         return data
 
+    def get_pixels(self) -> list[dict[str, Any]]:
+        """List the account's tracking pixels (id, name, last fired, availability)."""
+        url = (
+            f"https://graph.facebook.com/{self.graph_api_version}/"
+            f"{self.ad_account_id}/adspixels"
+        )
+        payload = self._get(
+            url,
+            {"fields": "id,name,last_fired_time,is_unavailable", "limit": "100"},
+        )
+        data = payload.get("data")
+        if not isinstance(data, list) or not all(
+            isinstance(item, dict) for item in data
+        ):
+            raise MetaResponseError("Meta API piksel verisi beklenen biçimde değil.")
+        return data
+
+    def get_pixel_stats(self, pixel_id: str, start_time: str) -> list[dict[str, Any]]:
+        """Read a pixel's event counts by event type since ``start_time`` (YYYY-MM-DD)."""
+        url = f"https://graph.facebook.com/{self.graph_api_version}/{pixel_id}/stats"
+        payload = self._get(
+            url, {"aggregation": "event", "start_time": start_time}
+        )
+        data = payload.get("data")
+        if not isinstance(data, list):
+            raise MetaResponseError("Meta API piksel istatistiği beklenen biçimde değil.")
+        return data
+
+    def get_entity(self, entity_id: str, fields: str) -> dict[str, Any]:
+        """Read selected fields of any entity (campaign/ad set/ad) for previews."""
+        url = f"https://graph.facebook.com/{self.graph_api_version}/{entity_id}"
+        return self._get(url, {"fields": fields})
+
     def create_lookalike_audience(
         self,
         source_audience_id: str,
@@ -668,6 +701,21 @@ def create_lookalike_audience(
 def get_ad_set(adset_id: str) -> dict[str, Any]:
     """Read an ad set's full configuration."""
     return MetaClient.from_env().get_ad_set(adset_id)
+
+
+def get_pixels() -> list[dict[str, Any]]:
+    """List the configured account's tracking pixels."""
+    return MetaClient.from_env().get_pixels()
+
+
+def get_pixel_stats(pixel_id: str, start_time: str) -> list[dict[str, Any]]:
+    """Read a pixel's event counts by event type since a start date."""
+    return MetaClient.from_env().get_pixel_stats(pixel_id, start_time)
+
+
+def get_entity(entity_id: str, fields: str) -> dict[str, Any]:
+    """Read selected fields of any entity (for write previews)."""
+    return MetaClient.from_env().get_entity(entity_id, fields)
 
 
 def clone_ad_set(

@@ -36,7 +36,14 @@ asıl mantık `meta/` ve `rules/` içinde, test edilebilir saf fonksiyonlardadı
 
 - **Salt okunur varsayılan.** Yazma araçları (`app/tools/meta_write.py`) yalnızca
   `ENABLE_WRITE_ACTIONS=true` iken çalışır ve agent önce kullanıcıdan açık onay alır.
-  Oluşturulan her şey DURAKLATILMIŞ gelir.
+  Oluşturulan her şey DURAKLATILMIŞ gelir. Harcamayı/durumu değiştiren araçlar
+  (bütçe/aktifleştir/durdur) `dry_run=True` ile gerçek veriden bir önizleme
+  döndürür (yazma yapmaz); agent önce önizler, onay alır, sonra `dry_run=False`
+  ile uygular.
+- **İzleme sağlığı** (`app/meta/tracking_health.py` + `app/rules/tracking_rules.py`):
+  pikselin olay hunisini/tazeliğini denetler. Veri `client.get_pixels()` ve
+  `client.get_pixel_stats()` salt-okunur metotlarından gelir. Kurallar saf ve
+  test edilebilir; eşik eklemek için `tracking_rules.py`'a kural ekle.
 - **Metrik uydurma yok.** Veriye yalnızca araçlar/`client.py` üzerinden erişilir;
   bir araç hata dönerse açıkça aktarılır, sayı uydurulmaz.
 - **Test deseni:** yazma mantığı saf `_impl` yardımcılarında durur; `@function_tool`

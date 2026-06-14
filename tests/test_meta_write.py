@@ -90,6 +90,47 @@ def test_budget_blocked_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "KAPALI" in out
 
 
+def test_budget_dry_run_previews_without_writing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    fake = {"name": "Kampanya A", "status": "ACTIVE", "daily_budget": "120000"}  # 1200 TL
+    with patch.object(mw, "get_entity", return_value=fake) as read, \
+            patch.object(mw, "set_daily_budget") as budget:
+        out = mw._update_daily_budget("123", 3000, dry_run=True)
+    assert budget.called is False           # hiçbir yazma yapılmadı
+    assert read.called is True
+    assert "ÖNİZLEME" in out
+    assert "1200" in out and "3000" in out   # mevcut -> yeni
+    assert "+150" in out                     # %150 artış
+
+
+def test_budget_dry_run_works_without_current_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    with patch.object(mw, "get_entity", side_effect=mw.MetaAPIError("yok")), \
+            patch.object(mw, "set_daily_budget") as budget:
+        out = mw._update_daily_budget("123", 3000, dry_run=True)
+    assert budget.called is False
+    assert "ÖNİZLEME" in out and "3000" in out
+
+
+def test_activate_dry_run_shows_spend_exposure(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    fake = {"name": "Set B", "status": "PAUSED", "daily_budget": "50000"}  # 500 TL
+    with patch.object(mw, "get_entity", return_value=fake), \
+            patch.object(mw, "set_entity_status") as status:
+        out = mw._activate_entity("123", dry_run=True)
+    assert status.called is False
+    assert "ÖNİZLEME" in out and "YAYINA" in out and "500" in out
+
+
+def test_pause_dry_run_does_not_write(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
+    with patch.object(mw, "get_entity", return_value={"name": "X"}), \
+            patch.object(mw, "set_entity_status") as status:
+        out = mw._pause_entity("123", dry_run=True)
+    assert status.called is False
+    assert "ÖNİZLEME" in out and "DURAKLATILACAK" in out
+
+
 def test_ad_set_creates_paused_with_budget_conversion(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENABLE_WRITE_ACTIONS", "true")
     calls = {}
