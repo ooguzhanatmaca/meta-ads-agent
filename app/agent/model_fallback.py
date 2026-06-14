@@ -68,6 +68,26 @@ def _is_rate_limit(exc: Exception) -> bool:
     return "429" in text or "insufficient_quota" in text or "quota" in text
 
 
+def _is_transient_server_error(exc: Exception) -> bool:
+    """Geçici sunucu hatası (503/529 aşırı yük, model anlık dolu) → sıradaki modele geç.
+
+    Sağlayıcı "şu an yoğun, sonra dene" diyor; zincirdeki diğer modeller veya
+    sağlayıcılar çalışabilir, bu yüzden agent'ı çökertmek yerine sıradakine geçilir.
+    """
+    if isinstance(exc, openai.APIStatusError) and getattr(exc, "status_code", None) in (503, 529):
+        return True
+    text = str(exc).lower()
+    return (
+        "503" in text
+        or "529" in text
+        or "serviceunavailable" in text
+        or "service_unavailable" in text
+        or "unavailable" in text
+        or "overloaded" in text
+        or "high demand" in text
+    )
+
+
 def _is_access_blocked(exc: Exception) -> bool:
     """Provider won't serve this model (no credits, billing, suspended/forbidden).
 
@@ -184,6 +204,8 @@ async def run_with_fallback(agent: Any, user_input: Any, **kwargs: Any) -> Agent
                     break  # modelin geçici hatası → sıradaki modele geç
                 if _is_access_blocked(exc):
                     break  # kredi/bakiye/yetki engeli → sıradaki modele geç
+                if _is_transient_server_error(exc):
+                    break  # 503/529 geçici aşırı yük → sıradaki modele geç
                 raise  # gerçek hata → yükselt
 
     raise RuntimeError(

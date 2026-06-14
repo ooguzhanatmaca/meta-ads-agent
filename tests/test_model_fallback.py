@@ -129,6 +129,36 @@ def test_access_blocked_detects_no_credit_and_auth() -> None:
     assert not mf._is_access_blocked(Exception("some unrelated error"))
 
 
+def test_transient_server_error_detected() -> None:
+    assert mf._is_transient_server_error(Exception("GeminiException - 503 ... UNAVAILABLE"))
+    assert mf._is_transient_server_error(Exception("model is overloaded, high demand"))
+    assert not mf._is_transient_server_error(Exception("some unrelated error"))
+
+
+def test_gemini_503_falls_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Gemini 503 (geçici aşırı yük) -> agent çökmeden sıradaki modele geçmeli.
+    monkeypatch.setenv("PRIMARY_MODEL", "gemini/gemini-2.5-flash")
+    monkeypatch.setenv("FALLBACK_MODEL", "openai")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    mf._model_cache.clear()
+
+    ok = MagicMock(final_output="OpenAI yanıtı")
+
+    async def fake_run(agent, user_input, **kwargs):
+        if "run_config" in kwargs:  # gemini çağrısı: 503
+            raise Exception(
+                'litellm.ServiceUnavailableError: GeminiException - {"error": '
+                '{"code": 503, "message": "high demand", "status": "UNAVAILABLE"}}'
+            )
+        return ok
+
+    with patch.object(mf.Runner, "run", side_effect=fake_run):
+        run = asyncio.run(mf.run_with_fallback("AGENT", "merhaba"))
+
+    assert run.provider == "openai"
+    assert run.result is ok
+
+
 def test_no_credit_balance_falls_through(monkeypatch: pytest.MonkeyPatch) -> None:
     # Claude birincil ama bakiyesi yok -> agent çökmeden OpenAI'a düşmeli.
     monkeypatch.setenv("PRIMARY_MODEL", "anthropic/claude-sonnet-4-6")
