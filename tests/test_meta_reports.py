@@ -6,6 +6,26 @@ from app.meta.ad_report import main as ad_main
 from app.meta.adset_report import main as adset_main
 from app.meta.campaign_report import main as campaign_main
 from app.meta.performance_report import calculate_report_rows, format_report
+from app.tools.meta_reports import _account_pixel_summary
+
+
+def test_account_pixel_summary_single_gives_id_and_tells_not_to_ask() -> None:
+    out = _account_pixel_summary([{"id": "123456", "name": "Mağaza Pikseli"}])
+    assert "PIXEL_ID=123456" in out
+    assert "SORMA" in out
+
+
+def test_account_pixel_summary_none_explains_missing() -> None:
+    out = _account_pixel_summary([])
+    assert "bulunamadı" in out and "PIXEL_ID" not in out
+
+
+def test_account_pixel_summary_multiple_asks_user() -> None:
+    out = _account_pixel_summary(
+        [{"id": "1", "name": "A"}, {"id": "2", "name": "B"}]
+    )
+    assert "birden fazla" in out
+    assert "PIXEL_ID=1" in out and "PIXEL_ID=2" in out
 
 
 def test_report_rows_calculate_metrics_and_sort_by_spend() -> None:

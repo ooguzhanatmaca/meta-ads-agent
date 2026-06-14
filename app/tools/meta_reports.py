@@ -17,6 +17,7 @@ from app.meta.client import (
     get_account_insights_breakdown,
     get_custom_audiences,
     get_performance_report,
+    get_pixels,
     test_meta_connection,
 )
 from app.meta.compare_periods import build_period_comparison
@@ -437,6 +438,42 @@ def get_anomaly_alerts() -> str:
         return build_anomaly_report()
     except MetaAPIError as error:
         return f"Uyarılar oluşturulamadı: {error}"
+
+
+def _account_pixel_summary(pixels: list[dict[str, Any]]) -> str:
+    """Format the account's pixel(s) for the agent to use in conversion setups."""
+    if not pixels:
+        return (
+            "Hesaba bağlı bir dönüşüm pikseli bulunamadı. Satış/dönüşüm "
+            "optimizasyonu için önce Meta'da bir piksel kurup web sitesine "
+            "bağlamanız gerekir; bu olmadan satışlar ölçülemez."
+        )
+    if len(pixels) == 1:
+        pixel = pixels[0]
+        return (
+            f"PIXEL_ID={pixel.get('id')} (ad: {pixel.get('name')}). "
+            "Dönüşüm/satış optimizasyonunda bu pikseli kullan; kullanıcıya "
+            "piksel ID'sini SORMA."
+        )
+    lines = ["Hesapta birden fazla piksel var; hangisini kullanacağını kullanıcıya sor:"]
+    for pixel in pixels:
+        lines.append(f"  - PIXEL_ID={pixel.get('id')} (ad: {pixel.get('name')})")
+    return "\n".join(lines)
+
+
+@function_tool
+def get_account_pixel() -> str:
+    """Hesaba bağlı dönüşüm pikselini (id + ad) döndürür.
+
+    Satış/dönüşüm optimizasyonu (OFFSITE_CONVERSIONS) için reklam seti
+    oluştururken pixel_id gerekir. Kullanıcıya piksel ID'sini SORMA — önce bunu
+    çağırıp hesabın pikselini otomatik kullan. Tek piksel varsa onu kullan;
+    hiç yoksa veya birden fazla varsa çıktıdaki yönlendirmeye uy.
+    """
+    try:
+        return _account_pixel_summary(get_pixels())
+    except MetaAPIError as error:
+        return f"Piksel bilgisi alınamadı: {error}"
 
 
 @function_tool

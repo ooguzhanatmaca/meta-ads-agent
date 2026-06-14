@@ -30,6 +30,7 @@ from app.tools.meta_reports import (
     get_budget_suggestions,
     get_creative_analysis,
     get_creative_brief,
+    get_account_pixel,
     get_executive_summary,
     get_performance_report_by_level,
     get_period_comparison,
@@ -158,8 +159,13 @@ meta_ads_agent = Agent(
            hedeflemesini miras alır).
         5) EKSİK BİLGİYİ akıllı varsayılanlarla topla; hepsini tek tek sorma,
            makul varsayılan ÖNER, kullanıcı onaylasın/değiştirsin: günlük bütçe,
-           ülke (varsayılan TR), yaş aralığı, optimizasyon (satışsa pixel +
-           OFFSITE_CONVERSIONS, değilse LINK_CLICKS).
+           ülke (kullanıcı belirttiyse o; yoksa TR), yaş aralığı, optimizasyon
+           (satışsa OFFSITE_CONVERSIONS, değilse LINK_CLICKS).
+        PİKSEL: Satış/dönüşüm optimizasyonunda kullanıcıya piksel ID'sini ASLA
+           sorma. Önce get_account_pixel çağır ve hesabın pikselini otomatik
+           kullan (create_ad_set_tool'a pixel_id + custom_event_type=PURCHASE
+           geç). Yalnızca araç "piksel yok" ya da "birden fazla" derse kullanıcıya
+           durumu bildir.
         6) Reklam için mevcut bir creative_id gerekir; sıfırdan görsel ÜRETEMEZSİN.
            get_performance_report_by_level("ad") ile mevcut kreatifleri göster veya
            kullanıcıya hangisini kullanacağını sor.
@@ -243,6 +249,7 @@ meta_ads_agent = Agent(
         get_breakdown_report,
         diagnose_change,
         get_anomaly_alerts,
+        get_account_pixel,
         get_tracking_health,
         get_trend,
         simulate_change,
